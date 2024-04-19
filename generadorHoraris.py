@@ -224,6 +224,4 @@ if __name__ == "__main__":
         st.write("Taula amb la assignació de treballs")
         st.write(dfj)
 
-        st.write(database_workers)
-
         printTimeline(timeline)
