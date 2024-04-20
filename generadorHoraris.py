@@ -1,8 +1,10 @@
 import streamlit as st
 import pandas as pd
+import openpyxl as opxl
 import sys
+
 from funcions import *
-from openpyxl import load_workbook
+
 
 
 
@@ -308,7 +310,7 @@ if __name__ == "__main__":
 
         try:
             # Load the workbook
-            wb = load_workbook('output.xlsx')
+            wb = opxl.load_workbook('output.xlsx')
             print(additionalInfoList)
             # Loop through the data list
             for data in additionalInfoList:
