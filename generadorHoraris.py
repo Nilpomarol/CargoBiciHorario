@@ -5,7 +5,6 @@ from funcions import *
 
 
 
-
 if __name__ == "__main__":
     st.set_page_config(layout="wide")
 
@@ -19,7 +18,7 @@ if __name__ == "__main__":
         #time to start shift
         timeToStartShift = int(st.text_input("Temps abans de començar el torn", 12))
         #time to end Shift
-        timeToEndShift = int(st.text_input("Temps després d'acabar el torn", 6))
+        timeToEndShift = int(st.text_input("Temps després d'acabar el torn", 5))
         #time between deliveries
         timeForDelivery = int(st.text_input("Temps per entrega", 7))
         #time between routes
@@ -35,8 +34,8 @@ if __name__ == "__main__":
         #Maximum time before an worker gets assigned another route
         maxWaitTimeBetweenRoutes = int(st.text_input("Màxim temps d'espera entre rutes", 20))
 
-        #temps mobilitat entre hubs
-    
+        #max time to enter the first route early
+        firstRouteMaxEarlyDepartureTime = int(st.text_input("Marge de temps de sortida abans del previst de la primera ruta del torn", 10))
         #Global maximum of working hours
         globalMaxhours = int(st.text_input("Maximes hores globals per treballador", 9))
         #extra hours
@@ -52,12 +51,14 @@ if __name__ == "__main__":
 
     
 
-    if routesTable and workersTable:
+    if routesTable:
         
-        #dict with the information of max working hours and names of the workers
-        database_workers = process_workers(workersTable, extra6hours, extra4hours, extra0hours)
+        database_workers = {}
+        if workersTable:
+            #dict with the information of max working hours and names of the workers
+            database_workers = process_workers(workersTable, extra6hours, extra4hours, extra0hours)
         #data frame with all the data about the jobs, its duration, start time, location, date...
-        dfj_hub = pd.DataFrame(process_routes(routesTable, timeForDelivery), columns = ["Id", "Data", "Hub", "Hora Sortida", "Temps ruta", "Hora Arribada", "Num Entregues", "Assignacio", "order"])
+        dfj_hub = pd.DataFrame(process_routes(routesTable, timeForDelivery), columns = ["Id", "Data", "Hub", "Hora Inici Ruta Plnif", "Hora Inici Ruta Real", "Hora Fi Ruta", "Temps ruta", "Num Entregues", "Assignacio", "order"])
         
         #divide the dataframe into smaller, each one pertaining to a different hub
         dfj_hub = dfj_hub.groupby("Hub")
@@ -85,7 +86,7 @@ if __name__ == "__main__":
                 #worker asigned to the route
                 asignedTo = -1
                 #expected initial time of the route
-                expectedInitialTime = horaToInt(row["Hora Sortida"])
+                expectedInitialTime = horaToInt(row["Hora Inici Ruta Plnif"])
                 #maximum late time to start the route
                 maxDelayedInitialTime = expectedInitialTime + delayedDepartureTimeMargin
                 #maximum early time to start the route
@@ -94,7 +95,7 @@ if __name__ == "__main__":
                 timeToCompleteRoute = row["Temps ruta"] + row["Num Entregues"] * timeForDelivery
 
                 #end time of the route
-                endTime = horaToInt(row["Hora Arribada"]) + timeBetweenRoutes
+                endTime = horaToInt(row["Hora Fi Ruta"]) + timeBetweenRoutes
 
                 for t, value in workers.items(): #check if any worker is available
                     
@@ -116,23 +117,35 @@ if __name__ == "__main__":
                         #assign the job to worker t, and update the corresponding data structures
                         asignedTo = t
 
-                        routeStartTime = max(value[0], maxEarlyInitialTime)
+                        routeStartTime = max(value[0], maxEarlyInitialTime) #Start time of the route
+
+                        dfj.at[index, "Hora Inici Ruta Real"] = intToHora(routeStartTime) #update the table with the actual start time of the route
                         
-                        endTime = routeStartTime + timeToCompleteRoute + timeBetweenRoutes
+                        endTime = routeStartTime + timeToCompleteRoute + timeBetweenRoutes #time when the worker can start the next route
+
+                        dfj.at[index, "Hora Fi Ruta"] = intToHora(routeStartTime + timeToCompleteRoute) #update the table with the actual end time of the route
+
                         workers[t] = (endTime, value[1], value[2])
                         
                         pre_dft[value[1]][3] = intToHora(routeStartTime + timeToCompleteRoute + timeToEndShift) #update the provisional end of the shift
                         pre_dft[value[1]][4] = round((horaToInt(pre_dft[value[1]][3]) - horaToInt(pre_dft[value[1]][2]))/60,1) #update the total hours worked
                         
-                        timeline[asignedTo].append((row["Id"].split()[0],intToHora(routeStartTime), intToHora(endTime)))
+                        timeline[asignedTo][-1] = (timeline[asignedTo][-1][0], timeline[asignedTo][-1][1], intToHora(horaToInt(timeline[asignedTo][-1][2])+10))
+                        timeline[asignedTo].append((row["Id"].split()[0],intToHora(routeStartTime), intToHora(routeStartTime + timeToCompleteRoute)))
                         
                         break
                         
                         
 
                 if asignedTo == -1: #No worker is available, then, add another worker
+                    
+                    maxEarlyInitialTime = expectedInitialTime - firstRouteMaxEarlyDepartureTime #Start time of the route
 
-                    endTime = maxEarlyInitialTime + timeToCompleteRoute + timeBetweenRoutes
+                    dfj.at[index, "Hora Inici Ruta Real"] = intToHora(maxEarlyInitialTime) #update the table with the actual start time of the route
+
+                    endTime = maxEarlyInitialTime + timeToCompleteRoute + timeBetweenRoutes #time when the worker can start the next route
+                    
+                    dfj.at[index, "Hora Fi Ruta"] = intToHora(maxEarlyInitialTime + timeToCompleteRoute)
 
                     id = totalworkers #New worker assigned to this route
                     workers[id] = (endTime, len(pre_dft), row['Hub']) #add it to the dict with the active workers and their last route end time
@@ -146,7 +159,7 @@ if __name__ == "__main__":
                     
                     pre_dft.append(newWorker) #add worker to the database
 
-                    timeline[id] = [(row["Id"].split()[0],intToHora(maxEarlyInitialTime), intToHora(endTime))]
+                    timeline[id] = [(row["Id"].split()[0],intToHora(maxEarlyInitialTime), intToHora(maxEarlyInitialTime + timeToCompleteRoute))]
 
                     asignedTo = id
                     totalworkers += 1
@@ -160,7 +173,7 @@ if __name__ == "__main__":
 
 
         #create the data frame from the info gathered in the list
-        dft = pd.DataFrame(pre_dft, columns=['Hub', 'worker', 'Hora Entrada', 'Hora Sortida', 'Hores Totals'])
+        dft = pd.DataFrame(pre_dft, columns=['Hub', 'worker', 'Hora Entrada', 'Hora Inici Ruta Plnif', 'Hores Totals'])
         dft = dft.sort_values(by='Hores Totals', ascending=False)
         
         idToWorker = {}
@@ -170,8 +183,14 @@ if __name__ == "__main__":
         #Assign workers to the shift the best fits their hours
 
         dft.insert(1, "Treballador", '')
+        extraWorkers = 65
+
         for index, row in dft.iterrows():
-            idToWorker[row["worker"]] = database_workers[i][0]
+            if i in database_workers:
+                idToWorker[row["worker"]] = database_workers[i][0]
+            else:
+                idToWorker[row["worker"]] = chr(extraWorkers)
+                extraWorkers += 1
             dft.at[index, "Treballador"] = idToWorker[row["worker"]]
             i += 1
         
