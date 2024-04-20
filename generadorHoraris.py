@@ -304,7 +304,7 @@ if __name__ == "__main__":
 
                     if colToWrite == 22:
                         colToWrite = 1
-                        rowToWrite += len(df_workerTimeline) + 4
+                        rowToWrite += len(df_workerTimeline) + 8
 
                 workerList[hub] = workerListAux
 
