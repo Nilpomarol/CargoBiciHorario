@@ -222,18 +222,42 @@ if __name__ == "__main__":
             #sort workers by id
             dft_hub.sort_values(by='Hores Totals', ascending=False)
 
+            totalHoursHub = round(dft_hub["Hores Totals"].sum(),1)
+
+            workersInHub = len(dft_hub)
+
+            numberDeliveriesHub = len(dfj[dfj["Hub"] == hub])
+
+
             
             
             
             if columna == 1:
                 columna = 2
                 with col3:
+                    st.write("Informació per al Hub: " + hub)
+                    col5, col6, col7 = st.columns(3)
+                    with col5:
+                        st.write("Hores Totals: " + str(totalHoursHub))
+                    with col6:
+                        st.write("Numero de traballadors: " + str(workersInHub))
+                    with col7:
+                        st.write("Numero de rutes: " + str(numberDeliveriesHub))
+
                     #print in columnt 1 worker information for the actual hub
                     st.write("Taula amb les hores del empleats per al Hub: " + hub)
                     st.write(dft_hub)
             else:
                 columna = 1
                 with col4:
+                    st.write("Informació per al Hub: " + hub)
+                    col5, col6, col7 = st.columns(3)
+                    with col5:
+                        st.write("Hores Totals al Hub: " + str(totalHoursHub))
+                    with col6:
+                        st.write("Numero de traballadors: " + str(workersInHub))
+                    with col7:
+                        st.write("Numero de rutes: " + str(numberDeliveriesHub))
                     #print in columnt 2 worker information for the actual hub
                     st.write("Taula amb les hores del empleats per al Hub: " + hub)
                     st.write(dft_hub)
