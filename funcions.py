@@ -3,8 +3,17 @@ import pandas as pd
 import re
 
 
-def intToHora(hora):
-    return str(hora//60)+':'+str(hora%60)
+def intToHora(time):
+    hours = time // 60
+    minutes = time%60
+    horaString = ''
+    if hours < 10:
+        horaString += "0" 
+    horaString += str(hours) + ':'
+    if minutes < 10:
+        horaString += "0"
+    horaString += str(minutes)
+    return horaString
 
 def horaToInt(hora):
     return int(hora.split(':')[0])*60 + int(hora.split(':')[1])
@@ -28,7 +37,7 @@ def process_routes(routes_table, timeForDelivery):
         #arrival time in minutes
         arrivalTime = departureTime + int(route[6]) + int(route[12]) * timeForDelivery
         #process an element of the data frame and uses the correct format
-        route_data = [route[0], route[2], route[10], route[3], int(route[6]), intToHora(arrivalTime), int(route[12]), "", departureTime]
+        route_data = [route[0], route[2], route[10], route[3], '', intToHora(arrivalTime), int(route[6]), int(route[12]), "", departureTime]
                     
         data.append(route_data)
     
@@ -44,13 +53,13 @@ def process_workers(workers_table, extra6hours, extra4hours, extra0hours):
         if not line.strip():
             continue
         
-        worker = line.split()
+        worker = re.split(r"\t", line)
         
         if len(worker) != 2:  # Check for expected number of elements
             print(f"Warning: Unexpected line format: {line}")
             continue  # Skip lines with incorrect format
 
-        if worker[1] == "Out":
+        if not worker[1].isdigit():
             continue #skip workers with no hours
 
         workingHours = (int(worker[1])/5) #convert into minutes
