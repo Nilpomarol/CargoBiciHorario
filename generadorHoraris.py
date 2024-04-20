@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
-import re
+import sys
 from funcions import *
+from openpyxl import load_workbook
 
 
 
@@ -27,7 +28,6 @@ if __name__ == "__main__":
         earlyDepartureTimeMargin = int(st.text_input("Marge de temps de sortida abans del previst", 20))
         #Represents the amount of time by which one departs later than the scheduled departure time
         delayedDepartureTimeMargin = int(st.text_input("Marge de temps de sortida despres del previst", 15))
-    
 
     with col2:
 
@@ -49,6 +49,7 @@ if __name__ == "__main__":
     #table with routes to order
     routesTable = st.text_area("taula amb les rutes")
 
+    colButton, colaux = st.columns(2)
     
 
     if routesTable:
@@ -218,6 +219,9 @@ if __name__ == "__main__":
 
         #separete the different hubs
         dft = dft.groupby("Hub")
+
+        additionalInfoList = []
+
         for hub, dft_hub in dft:
             #sort workers by id
             dft_hub.sort_values(by='Hores Totals', ascending=False)
@@ -228,7 +232,7 @@ if __name__ == "__main__":
 
             numberDeliveriesHub = len(dfj[dfj["Hub"] == hub])
 
-
+            additionalInfoList.append((hub, len(dft_hub), totalHoursHub, workersInHub, numberDeliveriesHub))
             
             
             
@@ -268,3 +272,91 @@ if __name__ == "__main__":
         st.write(dfj)
 
         printTimeline(timeline)
+
+        #Code section that generates an excel file with the results of the code
+        with pd.ExcelWriter('output.xlsx') as writer:
+            dfj.to_excel(writer, sheet_name='Taula General', startcol= 1, startrow= 1)
+
+            workerList = {}
+            
+
+            for hub, dft_hub in dft:
+                dft_hub.to_excel(writer, sheet_name=hub, startcol= 1, startrow= 1)
+
+                workerListAux = []
+
+                rowToWrite = len(dft_hub) + 8
+                colToWrite = 1
+
+                for index, row in dft_hub.iterrows():
+                    workerTimeline = timeline[row["Treballador"]]
+                    df_workerTimeline = []
+                    for i in workerTimeline:
+                        newElement = [i[0], i[1], i[2]]
+                        df_workerTimeline.append(newElement)
+                    df_workerTimeline = pd.DataFrame(df_workerTimeline, columns=['ID', 'Inici Ruta', 'Fi Ruta'])
+                    df_workerTimeline.to_excel(writer, sheet_name=hub, startcol=colToWrite, startrow=rowToWrite)
+                    workerListAux.append((row["Treballador"], rowToWrite))
+                    
+                    colToWrite += 7
+
+                    if colToWrite == 22:
+                        colToWrite = 1
+                        rowToWrite += len(df_workerTimeline) + 4
+
+                workerList[hub] = workerListAux
+
+        try:
+            # Load the workbook
+            wb = load_workbook('output.xlsx')
+            print(additionalInfoList)
+            # Loop through the data list
+            for data in additionalInfoList:
+                # Get the sheet by name
+                sheet = wb[data[0]]
+
+
+                row_number = data[1]+2  # Assuming you want to sum from row 3 onwards
+                column_letter = 'G'  # Assuming you want to sum column G
+                formula = f"=SUM({column_letter}3:{column_letter}{row_number})"  # Construct the SUM formula
+                row_number +=1
+                row_number +=1
+                sheet.cell(row=row_number, column=6).value = "Total Hores"
+                sheet.cell(row=row_number, column=7).value = formula
+                row_number +=1
+                sheet.cell(row=row_number, column=6).value = "Num treballadors"
+                sheet.cell(row=row_number, column=7).value = data[3]
+                row_number +=1
+                sheet.cell(row=row_number, column=6).value = "Num Rutes"
+                sheet.cell(row=row_number, column=7).value = data[4]
+
+
+                colToWrite = 1
+ 
+                for tuple in workerList[data[0]]:
+                    
+                    row_number = tuple[1]
+                    sheet.cell(row=row_number+1, column=colToWrite+1).value = tuple[0]
+                    
+                    colToWrite += 7
+                    if colToWrite == 22:
+                        colToWrite = 1
+
+
+            # Save the workbook once after all data is written
+            wb.save('output.xlsx')
+
+            with colButton:
+                # Add a download button for the Excel file
+                if st.button('Download Excel File'):
+                    with open("output.xlsx", "rb") as file:
+                        file_content = file.read()
+                    st.download_button(label='Download Excel', data=file_content, file_name='output.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+        except Exception as e:
+            print(f"Error writing to Excel file: {e}")
+
+        
+
+
