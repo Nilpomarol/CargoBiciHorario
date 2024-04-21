@@ -37,7 +37,7 @@ def process_routes(routes_table, timeForDelivery):
         #arrival time in minutes
         arrivalTime = departureTime + int(route[6]) + int(route[12]) * timeForDelivery
         #process an element of the data frame and uses the correct format
-        route_data = [route[0], route[2], route[10], route[3], '', intToHora(arrivalTime), int(route[6]), int(route[12]), "", departureTime]
+        route_data = [route[0], route[2], route[10], route[3], '', intToHora(arrivalTime),'', int(route[6]), int(route[12]), '',"", departureTime, 0]
                     
         data.append(route_data)
     
