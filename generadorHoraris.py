@@ -53,7 +53,7 @@ if __name__ == "__main__":
 
     colButton, colaux = st.columns(2)
     
-
+ 
     if routesTable:
         
         database_workers = {}
@@ -61,7 +61,10 @@ if __name__ == "__main__":
             #dict with the information of max working hours and names of the workers
             database_workers = process_workers(workersTable, extra6hours, extra4hours, extra0hours)
         #data frame with all the data about the jobs, its duration, start time, location, date...
-        dfj_hub = pd.DataFrame(process_routes(routesTable, timeForDelivery), columns = ["Id", "Data", "Hub", "Hora Inici Ruta Plnif", "Hora Inici Ruta Real", "Hora Fi Ruta", "Temps ruta", "Num Entregues", "Assignacio", "order"])
+        dfj_hub = pd.DataFrame(process_routes(routesTable, timeForDelivery),
+                       columns=["Id", "Data", "Hub", "Hora Inici Ruta Plnif",
+                                "Hora Inici Ruta Real", "Hora Fi Ruta", "Inici Seguent Ruta",
+                                "Temps ruta", "Num Entregues","Assignació", "Assignacio", "order", "Plnif vs Real"])
         
         #divide the dataframe into smaller, each one pertaining to a different hub
         dfj_hub = dfj_hub.groupby("Hub")
@@ -127,6 +130,8 @@ if __name__ == "__main__":
                         endTime = routeStartTime + timeToCompleteRoute + timeBetweenRoutes #time when the worker can start the next route
 
                         dfj.at[index, "Hora Fi Ruta"] = intToHora(routeStartTime + timeToCompleteRoute) #update the table with the actual end time of the route
+                        dfj.at[index, "Plnif vs Real"] = -(horaToInt(row["Hora Inici Ruta Plnif"]) - routeStartTime) #difference of starting time between plan and actual
+                        dfj.at[index, "Inici Seguent Ruta"] = intToHora(endTime) #time at which the worker that did this route is available for the next one
 
                         workers[t] = (endTime, value[1], value[2])
                         
@@ -149,6 +154,8 @@ if __name__ == "__main__":
                     endTime = maxEarlyInitialTime + timeToCompleteRoute + timeBetweenRoutes #time when the worker can start the next route
                     
                     dfj.at[index, "Hora Fi Ruta"] = intToHora(maxEarlyInitialTime + timeToCompleteRoute)
+                    dfj.at[index, "Plnif vs Real"] = -(horaToInt(row["Hora Inici Ruta Plnif"]) - maxEarlyInitialTime) #difference of starting time between plan and actual
+                    dfj.at[index, "Inici Seguent Ruta"] = intToHora(endTime) #time at which the worker that did this route is available for the next one
 
                     id = totalworkers #New worker assigned to this route
                     workers[id] = (endTime, len(pre_dft), row['Hub']) #add it to the dict with the active workers and their last route end time
@@ -176,7 +183,7 @@ if __name__ == "__main__":
 
 
         #create the data frame from the info gathered in the list
-        dft = pd.DataFrame(pre_dft, columns=['Hub', 'worker', 'Hora Entrada', 'Hora Inici Ruta Plnif', 'Hores Totals'])
+        dft = pd.DataFrame(pre_dft, columns=['Hub', 'worker', 'Hora Inici Torn', 'Hora Final Torn', 'Hores Totals'])
         dft = dft.sort_values(by='Hores Totals', ascending=False)
         
         idToWorker = {}
@@ -195,6 +202,7 @@ if __name__ == "__main__":
                 idToWorker[row["worker"]] = chr(extraWorkers)
                 extraWorkers += 1
             dft.at[index, "Treballador"] = idToWorker[row["worker"]]
+            dft.at[index, "Hora Inici Aux"] = horaToInt(row["Hora Inici Torn"])
             i += 1
         
         dft = dft.drop("worker", axis=1)
@@ -226,7 +234,17 @@ if __name__ == "__main__":
 
         for hub, dft_hub in dft:
             #sort workers by id
-            dft_hub.sort_values(by='Hores Totals', ascending=False)
+
+            dft_hub_mati = dft_hub[dft_hub['Hora Inici Aux'] < 840]
+            dft_hub_tarda = dft_hub[dft_hub['Hora Inici Aux'] >= 840]
+
+            dft_hub_mati.sort_values(by='Hores Totals', ascending=False)
+            dft_hub_tarda.sort_values(by='Hores Totals', ascending=False)
+
+            dft_hub = pd.concat([dft_hub_mati, dft_hub_tarda])
+            dft_hub = dft_hub.drop('Hora Inici Aux', axis=1)
+
+            dft_hub.index = list(range(1, len(dft_hub) + 1))
 
             totalHoursHub = round(dft_hub["Hores Totals"].sum(),1)
 
@@ -281,13 +299,25 @@ if __name__ == "__main__":
 
             workerList = {}
             
+            djf_group = dfj.groupby('Hub')
 
             for hub, dft_hub in dft:
+                
+                dft_hub_mati = dft_hub[dft_hub['Hora Inici Aux'] < 840]
+                dft_hub_tarda = dft_hub[dft_hub['Hora Inici Aux'] >= 840]
+
+                dft_hub_mati.sort_values(by='Hores Totals', ascending=False)
+                dft_hub_tarda.sort_values(by='Hores Totals', ascending=False)
+
+                dft_hub = pd.concat([dft_hub_mati, dft_hub_tarda])
+                dft_hub = dft_hub.drop('Hora Inici Aux', axis=1)
+
+                dft_hub.index = list(range(1, len(dft_hub) + 1))
                 dft_hub.to_excel(writer, sheet_name=hub, startcol= 1, startrow= 1)
 
                 workerListAux = []
-
-                rowToWrite = len(dft_hub) + 8
+                djf_group.get_group(hub).to_excel(writer, sheet_name=hub, startcol= 10,startrow=1)
+                rowToWrite = len(djf_group.get_group(hub)) + 8
                 colToWrite = 1
 
                 for index, row in dft_hub.iterrows():
@@ -306,16 +336,23 @@ if __name__ == "__main__":
                         colToWrite = 1
                         rowToWrite += len(df_workerTimeline) + 8
 
+                
                 workerList[hub] = workerListAux
+
+
+        #Create the Excel files
 
         try:
             # Load the workbook
             wb = opxl.load_workbook('output.xlsx')
             print(additionalInfoList)
+
+            djf_group = dfj.groupby('Hub')
             # Loop through the data list
             for data in additionalInfoList:
                 # Get the sheet by name
                 sheet = wb[data[0]]
+
 
 
                 row_number = data[1]+2  # Assuming you want to sum from row 3 onwards
@@ -344,16 +381,35 @@ if __name__ == "__main__":
                     if colToWrite == 22:
                         colToWrite = 1
 
+                cellRangeString = 'V3:V' + str(len(djf_group.get_group(data[0]))+3) 
+                cellRange = sheet[cellRangeString]
+                
+                for row in cellRange:
+                    for cell in row:
+                        if cell.value is not None:
+                            if cell.value > 0:
+                                cell.font = opxl.styles.Font(color='FF0000')
+
+
+            sheet = wb['Taula General']
+            
+            cellRangeString = 'M3:M' + str(len(dfj)+3) 
+            cellRange = sheet[cellRangeString]
+            
+            for row in cellRange:
+                for cell in row:
+                    if cell.value is not None:
+                        if cell.value > 0:
+                            cell.font = opxl.styles.Font(color='FF0000')
 
             # Save the workbook once after all data is written
             wb.save('output.xlsx')
 
             with colButton:
-                # Add a download button for the Excel file
-                if st.button('Download Excel File'):
-                    with open("output.xlsx", "rb") as file:
-                        file_content = file.read()
-                    st.download_button(label='Download Excel', data=file_content, file_name='output.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                
+                with open("output.xlsx", "rb") as file:
+                    file_content = file.read()
+                st.download_button(label='Download Excel', data=file_content, file_name='output.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
         except Exception as e:
