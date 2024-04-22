@@ -91,7 +91,7 @@ def printTimeline(timeline):
             with col1:
                 st.write(str(worker) + ": ")
                 for stop in value:
-                    st.write("id: " + stop[0][8:] + " de " + str(stop[1]) + " a " + str(stop[2]))
+                    st.write("id: " + stop[0][8:] + " de " + str(stop[1]) + " a " + str(stop[2]) + " Temps d'espera: " + str(stop[3]))
                 st.write("")
                 st.write("")
             c = 2
@@ -99,7 +99,7 @@ def printTimeline(timeline):
             with col2:
                 st.write(str(worker) + ": ")
                 for stop in value:
-                    st.write("id: " + stop[0][8:] + " de " + str(stop[1]) + " a " + str(stop[2]))
+                    st.write("id: " + stop[0][8:] + " de " + str(stop[1]) + " a " + str(stop[2]) + " Temps d'espera: " + str(stop[3]))
                 st.write("")
                 st.write("")
             c = 3
@@ -107,7 +107,7 @@ def printTimeline(timeline):
             with col3:
                 st.write(str(worker) + ": ")
                 for stop in value:
-                    st.write("id: " + stop[0][8:] + " de " + str(stop[1]) + " a " + str(stop[2]))
+                    st.write("id: " + stop[0][8:] + " de " + str(stop[1]) + " a " + str(stop[2]) + " Temps d'espera: " + str(stop[3]))
                 st.write("")
                 st.write("")
             c = 1

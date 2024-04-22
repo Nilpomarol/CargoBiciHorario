@@ -137,9 +137,11 @@ if __name__ == "__main__":
                         
                         pre_dft[value[1]][3] = intToHora(routeStartTime + timeToCompleteRoute + timeToEndShift) #update the provisional end of the shift
                         pre_dft[value[1]][4] = round((horaToInt(pre_dft[value[1]][3]) - horaToInt(pre_dft[value[1]][2]))/60,1) #update the total hours worked
+                        print(str(routeStartTime) + ", " + str(horaToInt(timeline[asignedTo][-1][2])+10) + ", " + str(routeStartTime-(horaToInt(timeline[asignedTo][-1][2])+10)))
                         
-                        timeline[asignedTo][-1] = (timeline[asignedTo][-1][0], timeline[asignedTo][-1][1], intToHora(horaToInt(timeline[asignedTo][-1][2])+10))
-                        timeline[asignedTo].append((row["Id"].split()[0],intToHora(routeStartTime), intToHora(routeStartTime + timeToCompleteRoute)))
+                        waitingTime = routeStartTime-(horaToInt(timeline[asignedTo][-1][2])+10)
+                        timeline[asignedTo][-1] = (timeline[asignedTo][-1][0], timeline[asignedTo][-1][1], intToHora(horaToInt(timeline[asignedTo][-1][2])+10), timeline[asignedTo][-1][3])
+                        timeline[asignedTo].append((row["Id"].split()[0],intToHora(routeStartTime), intToHora(routeStartTime + timeToCompleteRoute), waitingTime))
                         
                         break
                         
@@ -169,7 +171,7 @@ if __name__ == "__main__":
                     
                     pre_dft.append(newWorker) #add worker to the database
 
-                    timeline[id] = [(row["Id"].split()[0],intToHora(maxEarlyInitialTime), intToHora(maxEarlyInitialTime + timeToCompleteRoute))]
+                    timeline[id] = [(row["Id"].split()[0],intToHora(maxEarlyInitialTime), intToHora(maxEarlyInitialTime + timeToCompleteRoute), "")]
 
                     asignedTo = id
                     totalworkers += 1
@@ -316,17 +318,26 @@ if __name__ == "__main__":
                 dft_hub.to_excel(writer, sheet_name=hub, startcol= 1, startrow= 1)
 
                 workerListAux = []
-                djf_group.get_group(hub).to_excel(writer, sheet_name=hub, startcol= 10,startrow=1)
-                rowToWrite = len(djf_group.get_group(hub)) + 8
+                
+                rowToWrite = len(dft_hub) + 7
+                
+
+
+                dfj_hub = djf_group.get_group(hub)
+                dfj_hub.index = list(range(1, len(dfj_hub) +1))
+                dfj_hub.to_excel(writer, sheet_name=hub, startcol= 1,startrow=rowToWrite)
+                
+                rowToWrite += len(djf_group.get_group(hub)) + 5
+
                 colToWrite = 1
 
                 for index, row in dft_hub.iterrows():
                     workerTimeline = timeline[row["Treballador"]]
                     df_workerTimeline = []
                     for i in workerTimeline:
-                        newElement = [i[0], i[1], i[2]]
+                        newElement = [i[0], i[1], i[2], i[3]]
                         df_workerTimeline.append(newElement)
-                    df_workerTimeline = pd.DataFrame(df_workerTimeline, columns=['ID', 'Inici Ruta', 'Fi Ruta'])
+                    df_workerTimeline = pd.DataFrame(df_workerTimeline, columns=['ID', 'Inici Ruta', 'Fi Ruta', 'Temps Espera'])
                     df_workerTimeline.to_excel(writer, sheet_name=hub, startcol=colToWrite, startrow=rowToWrite)
                     workerListAux.append((row["Treballador"], rowToWrite))
                     
@@ -345,7 +356,6 @@ if __name__ == "__main__":
         try:
             # Load the workbook
             wb = opxl.load_workbook('output.xlsx')
-            print(additionalInfoList)
 
             djf_group = dfj.groupby('Hub')
             # Loop through the data list
@@ -369,6 +379,16 @@ if __name__ == "__main__":
                 sheet.cell(row=row_number, column=6).value = "Num Rutes"
                 sheet.cell(row=row_number, column=7).value = data[4]
 
+               
+                cellRangeString = 'M' + str(row_number+3) + ':M' + str(row_number + 3 + len(djf_group.get_group(data[0]))) 
+                cellRange = sheet[cellRangeString]
+
+                for row in cellRange:
+                    for cell in row:
+                        if cell.value is not None:
+                            if cell.value > 0:
+                                cell.font = opxl.styles.Font(color='FF0000')
+
 
                 colToWrite = 1
  
@@ -381,15 +401,7 @@ if __name__ == "__main__":
                     if colToWrite == 22:
                         colToWrite = 1
 
-                cellRangeString = 'V3:V' + str(len(djf_group.get_group(data[0]))+3) 
-                cellRange = sheet[cellRangeString]
-                
-                for row in cellRange:
-                    for cell in row:
-                        if cell.value is not None:
-                            if cell.value > 0:
-                                cell.font = opxl.styles.Font(color='FF0000')
-
+            
 
             sheet = wb['Taula General']
             
@@ -415,6 +427,6 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Error writing to Excel file: {e}")
 
-        
+    print("Program Ended")
 
 
