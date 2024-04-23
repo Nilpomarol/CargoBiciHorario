@@ -193,7 +193,7 @@ if __name__ == "__main__":
     #table with routes to order
     routesTable = st.text_area("taula amb les rutes")
 
-    colButton, colaux = st.columns(2)
+    colButton, _ = st.columns(2)
     
  
     if routesTable:
