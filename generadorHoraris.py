@@ -1,11 +1,134 @@
 import streamlit as st
 import pandas as pd
 import openpyxl as opxl
-import sys
+import re
 
-from funcions import *
+def intToHora(time):
+    hours = time // 60
+    minutes = time%60
+    return f"{hours:02d}:{minutes:02d}"
+
+def horaToInt(hora):
+    return int(hora.split(':')[0])*60 + int(hora.split(':')[1])
+
+#function to process the input data about routes
+def process_routes(routes_table, timeForDelivery):
+    """
+    Processes the input data about routes, 
+    calculating arrival times and creating a list of processed routes.
+
+    Args:
+        routes_table: String containing the routes data.
+        delivery_time_multiplier: Multiplier for delivery time.
+
+    Returns:
+        List of processed routes, or None if there's an error.
+    """
+
+    data = []
+
+    for line in routes_table.splitlines():
+        if not line.strip():
+            continue
+
+        route = re.split(r"\t", line)
+
+        if len(route) != 15:  # Check for expected number of elements
+            print(f"Warning: Unexpected line format: {line}")
+            continue  # Skip lines with incorrect format
+        #departure time in minutes
+        departureTime = horaToInt(route[3])
+        #arrival time in minutes
+        arrivalTime = departureTime + int(route[6]) + int(route[12]) * timeForDelivery
+        #process an element of the data frame and uses the correct format
+        priority = ' w ' in route[0].lower()
+        
+        processed_route = [route[0],priority, route[2], route[10], route[3], '', intToHora(arrivalTime),'', int(route[6]), int(route[12]),'', '',"", departureTime, 0]
+                    
+        data.append(processed_route)
+    
+    return data
 
 
+#function to process the input data about workers and their hours
+def process_workers(workers_table, extra6hours, extra4hours, extra0hours):
+    """
+    Processes the input data about workers and their hours, 
+    applying flexibility based on working hours and returning a dictionary.
+
+    Args:
+        workers_table: String containing the workers data.
+        extra_6hours: Flexibility multiplier for workers with more than 6 hours.
+        extra_4hours: Flexibility multiplier for workers with 4 to 6 hours.
+        extra_0hours: Flexibility multiplier for workers with less than 4 hours.
+
+    Returns:
+        Dictionary mapping worker names to their working hours with flexibility applied.
+    """
+    data = []
+
+    for line in workers_table.splitlines():
+        if not line.strip():
+            continue
+        
+        worker = re.split(r"\t", line)
+        
+        if len(worker) != 2:  # Check for expected number of elements
+            print(f"Warning: Unexpected line format: {line}")
+            continue  # Skip lines with incorrect format
+
+        if not worker[1].isdigit():
+            continue #skip workers with no hours
+
+        workingHours = (int(worker[1])/5) #convert into minutes
+
+        #Apply the hour flexibility
+        if workingHours > 6:
+            workingHours *= (1 + extra6hours)
+        elif workingHours > 4:
+            workingHours *= (1 + extra4hours)
+        else:
+            workingHours *= (1 + extra0hours)
+        
+        processed_worker = [worker[0], workingHours]
+
+        data.append(processed_worker)
+
+        #sorts by higher amount of hours
+        sorted_workers = sorted(data, key=lambda x: x[1], reverse=True)
+    
+    #converts it into a dict
+    return {i: element for i, element in enumerate(sorted_workers)}
+
+
+def printTimeline(timeline):
+    col1, col2, col3= st.columns(3)
+    c = 1
+    for worker, value in timeline.items():
+        if c == 1:
+            with col1:
+                st.write(str(worker) + ": ")
+                for stop in value:
+                    st.write("id: " + stop[0][8:] + " de " + str(stop[1]) + " a " + str(stop[2]) + " Temps d'espera (min): " + str(stop[3]))
+                st.write("")
+                st.write("")
+            c = 2
+        elif c == 2:
+            with col2:
+                st.write(str(worker) + ": ")
+                for stop in value:
+                    st.write("id: " + stop[0][8:] + " de " + str(stop[1]) + " a " + str(stop[2]) + " Temps d'espera (min): " + str(stop[3]))
+                st.write("")
+                st.write("")
+            c = 3
+        else:
+            with col3:
+                st.write(str(worker) + ": ")
+                for stop in value:
+                    st.write("id: " + stop[0][8:] + " de " + str(stop[1]) + " a " + str(stop[2]) + " Temps d'espera (min): " + str(stop[3]))
+                st.write("")
+                st.write("")
+            c = 1
 
 
 if __name__ == "__main__":
@@ -70,7 +193,7 @@ if __name__ == "__main__":
     #table with routes to order
     routesTable = st.text_area("taula amb les rutes")
 
-    colButton, colaux = st.columns(2)
+    colButton, _ = st.columns(2)
     
  
     if routesTable:
@@ -83,7 +206,7 @@ if __name__ == "__main__":
         dfj_hub = pd.DataFrame(process_routes(routesTable, timeForDelivery),
                        columns=["Id", "Prioritari", "Data", "Hub", "Hora Inici Ruta Plnif",
                                 "Hora Inici Ruta Real", "Hora Fi Ruta", "Inici Seguent Ruta",
-                                "Temps ruta", "Num Entregues","Assignació", "Assignacio", "order", "Plnif vs Real Min"])
+                                "Temps Recorregut Ruta", "Num Entregues","Temps Total Ruta", "Assignació", "Assignacio", "order", "Plnif vs Real Min"])
         
         #divide the dataframe into smaller, each one pertaining to a different hub
         dfj_hub = dfj_hub.groupby("Hub")
@@ -121,8 +244,8 @@ if __name__ == "__main__":
                     maxEarlyInitialTime = expectedInitialTime - earlyDepartureTimeMarginNoPriority #maximum early time to start the route with added non-priority margin
                  
                 #time to complete the route
-                timeToCompleteRoute = row["Temps ruta"] + row["Num Entregues"] * timeForDelivery
-
+                timeToCompleteRoute = row["Temps Recorregut Ruta"] + row["Num Entregues"] * timeForDelivery
+                dfj.at[index, "Temps Total Ruta"] = timeToCompleteRoute
                 #end time of the route
                 endTime = horaToInt(row["Hora Fi Ruta"]) + timeBetweenRoutes
 
@@ -277,8 +400,8 @@ if __name__ == "__main__":
             numberDeliveriesHub = len(dfj[dfj["Hub"] == hub])
 
             numberOfPackagesDelivered = dfj[dfj["Hub"] == hub]["Num Entregues"].sum()
-
-            additionalInfoList.append((hub, len(dft_hub), totalHoursHub, workersInHub, numberOfPackagesDelivered))
+            print(len(dfj[dfj["Hub"] == hub]))
+            additionalInfoList.append((hub, len(dfj[dfj["Hub"] == hub]), totalHoursHub, workersInHub, numberOfPackagesDelivered))
             
 
             if columna == 1:
@@ -349,7 +472,7 @@ if __name__ == "__main__":
 
                 workerListAux = []
                 
-                rowToWrite = len(dft_hub) + 9
+                rowToWrite = len(dft_hub) + 9 + 7
                 
 
 
@@ -393,9 +516,9 @@ if __name__ == "__main__":
                 # Get the sheet by name
                 sheet = wb[data[0]]
 
+                print(data)
 
-
-                row_number = data[1]+2  # Assuming you want to sum from row 3 onwards
+                row_number = data[3]+2  # Assuming you want to sum from row 3 onwards
                 column_letter = 'G'  # Assuming you want to sum column G
                 formula = f"=SUM({column_letter}3:{column_letter}{row_number})"  # Construct the SUM formula
                 row_number +=1
@@ -404,10 +527,10 @@ if __name__ == "__main__":
                 sheet.cell(row=row_number, column=7).value = formula
                 row_number +=1
                 sheet.cell(row=row_number, column=6).value = "Num treballadors"
-                sheet.cell(row=row_number, column=7).value = data[2]
+                sheet.cell(row=row_number, column=7).value = data[3]
                 row_number +=1
                 sheet.cell(row=row_number, column=6).value = "Num Rutes"
-                sheet.cell(row=row_number, column=7).value = data[3]
+                sheet.cell(row=row_number, column=7).value = data[1]
                 row_number +=1
                 sheet.cell(row=row_number, column=6).value = "Total Paquets"
                 sheet.cell(row=row_number, column=7).value = data[4]
@@ -418,8 +541,13 @@ if __name__ == "__main__":
                 for row in cellRange:
                     for cell in row:
                         if cell.value is not None:
-                            if cell.value > 0:
-                                cell.font = opxl.styles.Font(color='FF0000')
+                            try:
+                                numeric_value = int(cell.value)  # Attempt to convert cell value to integer
+                                if numeric_value > 0:
+                                    cell.font = opxl.styles.Font(color='FF0000')
+                            except ValueError:
+                                # Handle the case where cell.value is not a number
+                                pass
 
 
                 colToWrite = 1
@@ -443,8 +571,13 @@ if __name__ == "__main__":
             for row in cellRange:
                 for cell in row:
                     if cell.value is not None:
-                        if cell.value > 0:
-                            cell.font = opxl.styles.Font(color='FF0000')
+                        try:
+                            numeric_value = int(cell.value)  # Attempt to convert cell value to integer
+                            if numeric_value > 0:
+                                cell.font = opxl.styles.Font(color='FF0000')
+                        except ValueError:
+                            # Handle the case where cell.value is not a number
+                            pass
 
             # Save the workbook once after all data is written
 
@@ -461,15 +594,14 @@ if __name__ == "__main__":
 
             wb.save('output.xlsx')
 
-            with colButton:
-                
-                with open("output.xlsx", "rb") as file:
-                    file_content = file.read()
-                st.download_button(label='Download Excel', data=file_content, file_name='output.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-
+            
 
         except Exception as e:
             print(f"Error writing to Excel file: {e}")
+    with colButton:
+        with open("output.xlsx", "rb") as file:
+            file_content = file.read()
+        st.download_button(label='Download Excel', data=file_content, file_name='output.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
     print("Program Ended")
 
