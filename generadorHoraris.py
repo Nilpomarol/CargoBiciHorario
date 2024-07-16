@@ -43,7 +43,7 @@ def process_routes(routes_table, timeForDelivery):
         #process an element of the data frame and uses the correct format
         priority = ' w ' in route[0].lower()
         
-        processed_route = [route[0],priority, route[2], route[10], route[3], '', intToHora(arrivalTime),'', int(route[6]), int(route[12]), '',"", departureTime, 0]
+        processed_route = [route[0],priority, route[2], route[10], route[3], '', intToHora(arrivalTime),'', int(route[6]), int(route[12]),'', '',"", departureTime, 0]
                     
         data.append(processed_route)
     
@@ -206,7 +206,7 @@ if __name__ == "__main__":
         dfj_hub = pd.DataFrame(process_routes(routesTable, timeForDelivery),
                        columns=["Id", "Prioritari", "Data", "Hub", "Hora Inici Ruta Plnif",
                                 "Hora Inici Ruta Real", "Hora Fi Ruta", "Inici Seguent Ruta",
-                                "Temps ruta", "Num Entregues","Assignació", "Assignacio", "order", "Plnif vs Real Min"])
+                                "Temps Recorregut Ruta", "Num Entregues","Temps Total Ruta", "Assignació", "Assignacio", "order", "Plnif vs Real Min"])
         
         #divide the dataframe into smaller, each one pertaining to a different hub
         dfj_hub = dfj_hub.groupby("Hub")
@@ -244,8 +244,8 @@ if __name__ == "__main__":
                     maxEarlyInitialTime = expectedInitialTime - earlyDepartureTimeMarginNoPriority #maximum early time to start the route with added non-priority margin
                  
                 #time to complete the route
-                timeToCompleteRoute = row["Temps ruta"] + row["Num Entregues"] * timeForDelivery
-
+                timeToCompleteRoute = row["Temps Recorregut Ruta"] + row["Num Entregues"] * timeForDelivery
+                dfj.at[index, "Temps Total Ruta"] = timeToCompleteRoute
                 #end time of the route
                 endTime = horaToInt(row["Hora Fi Ruta"]) + timeBetweenRoutes
 
@@ -400,8 +400,8 @@ if __name__ == "__main__":
             numberDeliveriesHub = len(dfj[dfj["Hub"] == hub])
 
             numberOfPackagesDelivered = dfj[dfj["Hub"] == hub]["Num Entregues"].sum()
-
-            additionalInfoList.append((hub, len(dft_hub), totalHoursHub, workersInHub, numberOfPackagesDelivered))
+            print(len(dfj[dfj["Hub"] == hub]))
+            additionalInfoList.append((hub, len(dfj[dfj["Hub"] == hub]), totalHoursHub, workersInHub, numberOfPackagesDelivered))
             
 
             if columna == 1:
@@ -472,7 +472,7 @@ if __name__ == "__main__":
 
                 workerListAux = []
                 
-                rowToWrite = len(dft_hub) + 9
+                rowToWrite = len(dft_hub) + 9 + 7
                 
 
 
@@ -516,9 +516,9 @@ if __name__ == "__main__":
                 # Get the sheet by name
                 sheet = wb[data[0]]
 
+                print(data)
 
-
-                row_number = data[1]+2  # Assuming you want to sum from row 3 onwards
+                row_number = data[3]+2  # Assuming you want to sum from row 3 onwards
                 column_letter = 'G'  # Assuming you want to sum column G
                 formula = f"=SUM({column_letter}3:{column_letter}{row_number})"  # Construct the SUM formula
                 row_number +=1
@@ -527,10 +527,10 @@ if __name__ == "__main__":
                 sheet.cell(row=row_number, column=7).value = formula
                 row_number +=1
                 sheet.cell(row=row_number, column=6).value = "Num treballadors"
-                sheet.cell(row=row_number, column=7).value = data[2]
+                sheet.cell(row=row_number, column=7).value = data[3]
                 row_number +=1
                 sheet.cell(row=row_number, column=6).value = "Num Rutes"
-                sheet.cell(row=row_number, column=7).value = data[3]
+                sheet.cell(row=row_number, column=7).value = data[1]
                 row_number +=1
                 sheet.cell(row=row_number, column=6).value = "Total Paquets"
                 sheet.cell(row=row_number, column=7).value = data[4]
@@ -541,8 +541,13 @@ if __name__ == "__main__":
                 for row in cellRange:
                     for cell in row:
                         if cell.value is not None:
-                            if cell.value > 0:
-                                cell.font = opxl.styles.Font(color='FF0000')
+                            try:
+                                numeric_value = int(cell.value)  # Attempt to convert cell value to integer
+                                if numeric_value > 0:
+                                    cell.font = opxl.styles.Font(color='FF0000')
+                            except ValueError:
+                                # Handle the case where cell.value is not a number
+                                pass
 
 
                 colToWrite = 1
@@ -566,8 +571,13 @@ if __name__ == "__main__":
             for row in cellRange:
                 for cell in row:
                     if cell.value is not None:
-                        if cell.value > 0:
-                            cell.font = opxl.styles.Font(color='FF0000')
+                        try:
+                            numeric_value = int(cell.value)  # Attempt to convert cell value to integer
+                            if numeric_value > 0:
+                                cell.font = opxl.styles.Font(color='FF0000')
+                        except ValueError:
+                            # Handle the case where cell.value is not a number
+                            pass
 
             # Save the workbook once after all data is written
 
@@ -584,15 +594,14 @@ if __name__ == "__main__":
 
             wb.save('output.xlsx')
 
-            with colButton:
-                
-                with open("output.xlsx", "rb") as file:
-                    file_content = file.read()
-                st.download_button(label='Download Excel', data=file_content, file_name='output.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-
+            
 
         except Exception as e:
             print(f"Error writing to Excel file: {e}")
+    with colButton:
+        with open("output.xlsx", "rb") as file:
+            file_content = file.read()
+        st.download_button(label='Download Excel', data=file_content, file_name='output.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
     print("Program Ended")
 
