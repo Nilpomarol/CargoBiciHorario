@@ -42,8 +42,12 @@ def process_routes(routes_table, timeForDelivery):
         arrivalTime = departureTime + int(route[6]) + int(route[12]) * timeForDelivery
         #process an element of the data frame and uses the correct format
         priority = ' w ' in route[0].lower()
-        
-        processed_route = [route[0],priority, route[2], route[10], route[3], '', intToHora(arrivalTime),'', int(route[6]), int(route[12]),'', '',"", departureTime, 0]
+        bikeType = "Trike"
+        print(f"route[9]: {route[9]}")
+        if int(route[9]) > hipotesi["Pes Trike"]:
+            bikeType = "4 wheels"
+
+        processed_route = [route[0],priority, bikeType, route[2], route[10], route[3], '', intToHora(arrivalTime),'', int(route[6]), '',int(route[12]), '',"", departureTime, 0]
                     
         data.append(processed_route)
     
@@ -186,6 +190,9 @@ if __name__ == "__main__":
         hipotesi["Flexibilitat +4"] = extra4hours
         extra0hours = int(st.text_input("flexibilitat horaria treballadors menys de 4 hores", 20))/100
         hipotesi["Flexibilitat -4"] = extra0hours
+        pesTrike = int(st.text_input("Pes trike", 120))
+        hipotesi["Pes Trike"] = pesTrike
+
     
     #maxim d'hores per treballador
     workersTable = st.text_area("Informació hore de feina empleats ")
@@ -204,9 +211,9 @@ if __name__ == "__main__":
             database_workers = process_workers(workersTable, extra6hours, extra4hours, extra0hours)
         #data frame with all the data about the jobs, its duration, start time, location, date...
         dfj_hub = pd.DataFrame(process_routes(routesTable, timeForDelivery),
-                       columns=["Id", "Prioritari", "Data", "Hub", "Hora Inici Ruta Plnif",
+                       columns=["Id", "Prioritari", "Tipus Bici", "Data", "Hub", "Hora Inici Ruta Plnif",
                                 "Hora Inici Ruta Real", "Hora Fi Ruta", "Inici Seguent Ruta",
-                                "Temps Recorregut Ruta", "Num Entregues","Temps Total Ruta", "Assignació", "Assignacio", "order", "Plnif vs Real Min"])
+                                "Temps Recorregut Ruta", "Temps Total Ruta", "Num Entregues", "Assignació", "Assignacio", "order", "Plnif vs Real Min"])
         
         #divide the dataframe into smaller, each one pertaining to a different hub
         dfj_hub = dfj_hub.groupby("Hub")
@@ -382,13 +389,7 @@ if __name__ == "__main__":
         for hub, dft_hub in dft:
             #sort workers by id
 
-            dft_hub_mati = dft_hub[dft_hub['Hora Inici Aux'] < 840]
-            dft_hub_tarda = dft_hub[dft_hub['Hora Inici Aux'] >= 840]
-
-            dft_hub_mati.sort_values(by='Hores Totals', ascending=False)
-            dft_hub_tarda.sort_values(by='Hores Totals', ascending=False)
-
-            dft_hub = pd.concat([dft_hub_mati, dft_hub_tarda])
+            dft_hub = dft_hub.sort_values(by='Hora Inici Aux')
             dft_hub = dft_hub.drop('Hora Inici Aux', axis=1)
 
             dft_hub.index = list(range(1, len(dft_hub) + 1))
@@ -400,8 +401,13 @@ if __name__ == "__main__":
             numberDeliveriesHub = len(dfj[dfj["Hub"] == hub])
 
             numberOfPackagesDelivered = dfj[dfj["Hub"] == hub]["Num Entregues"].sum()
-            print(len(dfj[dfj["Hub"] == hub]))
-            additionalInfoList.append((hub, len(dfj[dfj["Hub"] == hub]), totalHoursHub, workersInHub, numberOfPackagesDelivered))
+            
+            trikeBikes = dfj[dfj["Hub"] == hub]
+            trikeBikes = trikeBikes[trikeBikes["Tipus Bici"] == "Trike"]
+            trikeBikes = len(trikeBikes)
+
+
+            additionalInfoList.append((hub, len(dfj[dfj["Hub"] == hub]), totalHoursHub, workersInHub, numberOfPackagesDelivered, trikeBikes))
             
 
             if columna == 1:
@@ -441,6 +447,7 @@ if __name__ == "__main__":
 
         
         st.write("Taula amb la assignació de treballs")
+        dfj = dfj.drop("Prioritari", axis=1)
         st.write(dfj)
 
         printTimeline(timeline)
@@ -455,14 +462,7 @@ if __name__ == "__main__":
 
 
             for hub, dft_hub in dft:
-                
-                dft_hub_mati = dft_hub[dft_hub['Hora Inici Aux'] < 840]
-                dft_hub_tarda = dft_hub[dft_hub['Hora Inici Aux'] >= 840]
-
-                dft_hub_mati.sort_values(by='Hores Totals', ascending=False)
-                dft_hub_tarda.sort_values(by='Hores Totals', ascending=False)
-
-                dft_hub = pd.concat([dft_hub_mati, dft_hub_tarda])
+                dft_hub = dft_hub.sort_values(by='Hora Inici Torn')
                 dft_hub = dft_hub.drop('Hora Inici Aux', axis=1)
 
                 dft_hub.index = list(range(1, len(dft_hub) + 1))
@@ -516,8 +516,6 @@ if __name__ == "__main__":
                 # Get the sheet by name
                 sheet = wb[data[0]]
 
-                print(data)
-
                 row_number = data[3]+2  # Assuming you want to sum from row 3 onwards
                 column_letter = 'G'  # Assuming you want to sum column G
                 formula = f"=SUM({column_letter}3:{column_letter}{row_number})"  # Construct the SUM formula
@@ -534,8 +532,14 @@ if __name__ == "__main__":
                 row_number +=1
                 sheet.cell(row=row_number, column=6).value = "Total Paquets"
                 sheet.cell(row=row_number, column=7).value = data[4]
+                row_number +=1
+                sheet.cell(row=row_number, column=6).value = "Trikes"
+                sheet.cell(row=row_number, column=7).value = data[5]
+                row_number +=1
+                sheet.cell(row=row_number, column=6).value = "Percentatge Trikes"
+                sheet.cell(row=row_number, column=7).value = f"=G{row_number-1}/G{row_number-3}"
 
-                cellRangeString = 'N' + str(row_number+5) + ':N' + str(row_number + 5 + len(dfj_group.get_group(data[0]))) 
+                cellRangeString = 'P' + str(row_number+5) + ':P' + str(row_number + 5 + len(dfj_group.get_group(data[0]))) 
                 cellRange = sheet[cellRangeString]
 
                 for row in cellRange:
@@ -565,7 +569,7 @@ if __name__ == "__main__":
 
             sheet = wb['Taula General']
             
-            cellRangeString = 'N3:N' + str(len(dfj)+3) 
+            cellRangeString = 'P3:P' + str(len(dfj)+3) 
             cellRange = sheet[cellRangeString]
             
             for row in cellRange:
@@ -603,6 +607,5 @@ if __name__ == "__main__":
             file_content = file.read()
         st.download_button(label='Download Excel', data=file_content, file_name='output.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-    print("Program Ended")
 
 
