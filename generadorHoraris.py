@@ -194,17 +194,20 @@ if __name__ == "__main__":
 
         # Parse the date string into a datetime object
         weekday = datetime.strptime(dfj_hub["Data"].iloc[0], "%d/%m/%Y").weekday()
+        dataSetWorkersNapols = None
+        dataSetWorkersSants = None
         if workersSantsTable:
             workersSantsTable = process_workers(workersSantsTable, weekday)
+            dataSetWorkersSants = pd.DataFrame(workersSantsTable, columns=["Treballador", "Entrada", "Sortida", "Hores", "Aux"])
+            dataSetWorkersSants = dataSetWorkersSants.sort_values(by="Aux")
+            dataSetWorkersSants = dataSetWorkersSants.drop("Aux", axis=1)
         if workersNapolsTable:
             workersNapolsTable = process_workers(workersNapolsTable, weekday)
+            dataSetWorkersNapols = pd.DataFrame(workersNapolsTable, columns=["Treballador", "Entrada", "Sortida", "Hores", "Aux"])
+            dataSetWorkersNapols = dataSetWorkersNapols.sort_values(by="Aux")
+            dataSetWorkersNapols = dataSetWorkersNapols.drop("Aux", axis=1)
+       
         
-        dataSetWorkersSants = pd.DataFrame(workersSantsTable, columns=["Treballador", "Entrada", "Sortida", "Hores", "Aux"])
-        dataSetWorkersSants = dataSetWorkersSants.sort_values(by="Aux")
-        dataSetWorkersSants = dataSetWorkersSants.drop("Aux", axis=1)
-        dataSetWorkersNapols = pd.DataFrame(workersNapolsTable, columns=["Treballador", "Entrada", "Sortida", "Hores", "Aux"])
-        dataSetWorkersNapols = dataSetWorkersNapols.sort_values(by="Aux")
-        dataSetWorkersNapols = dataSetWorkersNapols.drop("Aux", axis=1)
 
         #divide the dataframe into smaller, each one pertaining to a different hub
         dfj_hub = dfj_hub.groupby("Hub")
@@ -460,9 +463,11 @@ if __name__ == "__main__":
 
                 dft_hub.to_excel(writer, sheet_name=hub, startcol= 1, startrow= 1)
                 if hub == "Sants":
-                    dataSetWorkersSants.to_excel(writer, sheet_name=hub, startcol = 8, startrow = 1, index=False)
+                    if dataSetWorkersSants is not None:
+                        dataSetWorkersSants.to_excel(writer, sheet_name=hub, startcol = 8, startrow = 1, index=False)
                 else:
-                    dataSetWorkersNapols.to_excel(writer, sheet_name=hub, startcol = 8, startrow = 1, index=False)
+                    if dataSetWorkersNapols is not None:
+                        dataSetWorkersNapols.to_excel(writer, sheet_name=hub, startcol = 8, startrow = 1, index=False)
                 
 
                 workerListAux = []
@@ -532,11 +537,11 @@ if __name__ == "__main__":
                 row_number +=1
                 sheet.cell(row=row_number, column=5).value = "Trikes"
                 sheet.cell(row=row_number, column=6).value = data[5]
-                sheet.cell(row=row_number, column=7).value = f"=G{row_number}/G{row_number-2}"
+                sheet.cell(row=row_number, column=7).value = f"=F{row_number}/F{row_number-2}"
                 row_number +=1
                 sheet.cell(row=row_number, column=5).value = "4 Wheeler"
                 sheet.cell(row=row_number, column=6).value = data[1] - data[5]
-                sheet.cell(row=row_number, column=7).value = f"=G{row_number}/G{row_number-3}"
+                sheet.cell(row=row_number, column=7).value = f"=F{row_number}/F{row_number-3}"
                 row_number +=1
                
                 cellRangeString = 'P' + str(row_number+5) + ':P' + str(row_number + 5 + len(dfj_group.get_group(data[0]))) 
@@ -606,6 +611,8 @@ if __name__ == "__main__":
         with open("output.xlsx", "rb") as file:
             file_content = file.read()
         st.download_button(label='Download Excel', data=file_content, file_name='output.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+    print("End of the code")
 
 
 
