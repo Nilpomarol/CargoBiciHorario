@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import openpyxl as opxl
+from datetime import datetime
 import re
 
 def intToHora(time):
@@ -43,7 +44,7 @@ def process_routes(routes_table, timeForDelivery):
         #process an element of the data frame and uses the correct format
         priority = ' w ' in route[0].lower()
         bikeType = "Trike"
-        print(f"route[9]: {route[9]}")
+
         if int(route[9]) > hipotesi["Pes Trike"]:
             bikeType = "4 wheels"
 
@@ -55,54 +56,27 @@ def process_routes(routes_table, timeForDelivery):
 
 
 #function to process the input data about workers and their hours
-def process_workers(workers_table, extra6hours, extra4hours, extra0hours):
-    """
-    Processes the input data about workers and their hours, 
-    applying flexibility based on working hours and returning a dictionary.
-
-    Args:
-        workers_table: String containing the workers data.
-        extra_6hours: Flexibility multiplier for workers with more than 6 hours.
-        extra_4hours: Flexibility multiplier for workers with 4 to 6 hours.
-        extra_0hours: Flexibility multiplier for workers with less than 4 hours.
-
-    Returns:
-        Dictionary mapping worker names to their working hours with flexibility applied.
-    """
+def process_workers(workers_table, weekDay):
+    
     data = []
+
+    index = weekDay * 3 + 1
 
     for line in workers_table.splitlines():
         if not line.strip():
             continue
-        
+
         worker = re.split(r"\t", line)
+
+        if not re.match(r'^\d+:\d+$',worker[index]):
+            continue
+        horaInici = horaToInt(worker[index])
+
+        data.append([worker[0], worker[index], worker[index+1], float(worker[index+2].replace(",", ".")), horaInici])
+
+    return data
+
         
-        if len(worker) != 2:  # Check for expected number of elements
-            print(f"Warning: Unexpected line format: {line}")
-            continue  # Skip lines with incorrect format
-
-        if not worker[1].isdigit():
-            continue #skip workers with no hours
-
-        workingHours = (int(worker[1])/5) #convert into minutes
-
-        #Apply the hour flexibility
-        if workingHours > 6:
-            workingHours *= (1 + extra6hours)
-        elif workingHours > 4:
-            workingHours *= (1 + extra4hours)
-        else:
-            workingHours *= (1 + extra0hours)
-        
-        processed_worker = [worker[0], workingHours]
-
-        data.append(processed_worker)
-
-        #sorts by higher amount of hours
-        sorted_workers = sorted(data, key=lambda x: x[1], reverse=True)
-    
-    #converts it into a dict
-    return {i: element for i, element in enumerate(sorted_workers)}
 
 
 def printTimeline(timeline):
@@ -193,10 +167,16 @@ if __name__ == "__main__":
         pesTrike = int(st.text_input("Pes trike", 120))
         hipotesi["Pes Trike"] = pesTrike
 
-    
+    colSants, colNapols = st.columns(2)
+
     #maxim d'hores per treballador
-    workersTable = st.text_area("Informació hore de feina empleats ")
+    with colSants:
+        workersSantsTable = st.text_area("HORARIS SANTS")
+    with colNapols:
+        workersNapolsTable = st.text_area("HORARIS NAPOLS") 
     
+    
+
     #table with routes to order
     routesTable = st.text_area("taula amb les rutes")
 
@@ -206,15 +186,26 @@ if __name__ == "__main__":
     if routesTable:
         
         database_workers = {}
-        if workersTable:
-            #dict with the information of max working hours and names of the workers
-            database_workers = process_workers(workersTable, extra6hours, extra4hours, extra0hours)
         #data frame with all the data about the jobs, its duration, start time, location, date...
         dfj_hub = pd.DataFrame(process_routes(routesTable, timeForDelivery),
                        columns=["Id", "Prioritari", "Tipus Bici", "Data", "Hub", "Hora Inici Ruta Plnif",
                                 "Hora Inici Ruta Real", "Hora Fi Ruta", "Inici Seguent Ruta",
                                 "Temps Recorregut Ruta", "Temps Total Ruta", "Num Entregues", "Assignació", "Assignacio", "order", "Plnif vs Real Min"])
+
+        # Parse the date string into a datetime object
+        weekday = datetime.strptime(dfj_hub["Data"].iloc[0], "%d/%m/%Y").weekday()
+        if workersSantsTable:
+            workersSantsTable = process_workers(workersSantsTable, weekday)
+        if workersNapolsTable:
+            workersNapolsTable = process_workers(workersNapolsTable, weekday)
         
+        dataSetWorkersSants = pd.DataFrame(workersSantsTable, columns=["Treballador", "Entrada", "Sortida", "Hores", "Aux"])
+        dataSetWorkersSants = dataSetWorkersSants.sort_values(by="Aux")
+        dataSetWorkersSants = dataSetWorkersSants.drop("Aux", axis=1)
+        dataSetWorkersNapols = pd.DataFrame(workersNapolsTable, columns=["Treballador", "Entrada", "Sortida", "Hores", "Aux"])
+        dataSetWorkersNapols = dataSetWorkersNapols.sort_values(by="Aux")
+        dataSetWorkersNapols = dataSetWorkersNapols.drop("Aux", axis=1)
+
         #divide the dataframe into smaller, each one pertaining to a different hub
         dfj_hub = dfj_hub.groupby("Hub")
         
@@ -468,7 +459,11 @@ if __name__ == "__main__":
                 dft_hub.index = list(range(1, len(dft_hub) + 1))
 
                 dft_hub.to_excel(writer, sheet_name=hub, startcol= 1, startrow= 1)
-
+                if hub == "Sants":
+                    dataSetWorkersSants.to_excel(writer, sheet_name=hub, startcol = 8, startrow = 1, index=False)
+                else:
+                    dataSetWorkersNapols.to_excel(writer, sheet_name=hub, startcol = 8, startrow = 1, index=False)
+                
 
                 workerListAux = []
                 
@@ -521,24 +516,29 @@ if __name__ == "__main__":
                 formula = f"=SUM({column_letter}3:{column_letter}{row_number})"  # Construct the SUM formula
                 row_number +=1
                 row_number +=1
-                sheet.cell(row=row_number, column=6).value = "Total Hores"
-                sheet.cell(row=row_number, column=7).value = formula
+                sheet.cell(row=row_number, column=5).value = "Total Hores"
+                sheet.cell(row=row_number, column=6).value = formula
+                sheet.cell(row=row_number, column=11).value = "Total Hores"
+                sheet.cell(row=row_number, column=12).value = f"=SUM(L3:L{row_number-1})"
                 row_number +=1
-                sheet.cell(row=row_number, column=6).value = "Num treballadors"
-                sheet.cell(row=row_number, column=7).value = data[3]
+                sheet.cell(row=row_number, column=5).value = "Num treballadors"
+                sheet.cell(row=row_number, column=6).value = data[3]
                 row_number +=1
-                sheet.cell(row=row_number, column=6).value = "Num Rutes"
-                sheet.cell(row=row_number, column=7).value = data[1]
+                sheet.cell(row=row_number, column=5).value = "Num Rutes"
+                sheet.cell(row=row_number, column=6).value = data[1]
                 row_number +=1
-                sheet.cell(row=row_number, column=6).value = "Total Paquets"
-                sheet.cell(row=row_number, column=7).value = data[4]
+                sheet.cell(row=row_number, column=5).value = "Total Paquets"
+                sheet.cell(row=row_number, column=6).value = data[4]
                 row_number +=1
-                sheet.cell(row=row_number, column=6).value = "Trikes"
-                sheet.cell(row=row_number, column=7).value = data[5]
+                sheet.cell(row=row_number, column=5).value = "Trikes"
+                sheet.cell(row=row_number, column=6).value = data[5]
+                sheet.cell(row=row_number, column=7).value = f"=G{row_number}/G{row_number-2}"
                 row_number +=1
-                sheet.cell(row=row_number, column=6).value = "Percentatge Trikes"
-                sheet.cell(row=row_number, column=7).value = f"=G{row_number-1}/G{row_number-3}"
-
+                sheet.cell(row=row_number, column=5).value = "4 Wheeler"
+                sheet.cell(row=row_number, column=6).value = data[1] - data[5]
+                sheet.cell(row=row_number, column=7).value = f"=G{row_number}/G{row_number-3}"
+                row_number +=1
+               
                 cellRangeString = 'P' + str(row_number+5) + ':P' + str(row_number + 5 + len(dfj_group.get_group(data[0]))) 
                 cellRange = sheet[cellRangeString]
 
