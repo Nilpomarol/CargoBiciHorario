@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import openpyxl as opxl
 from datetime import datetime
+import json
+import os
 import re
 
 def intToHora(time):
@@ -108,6 +110,37 @@ def printTimeline(timeline):
                 st.write("")
             c = 1
 
+def load_data(file_path):
+    """Load data from a JSON file."""
+    if os.path.exists(file_path):
+        with open(file_path, 'r') as file:
+            print ("SIUUU")
+            return json.load(file)
+    else:
+        print("NOOOOOO")
+        return {
+            "Temps Inici Torn": 12,
+            "Temps Fi Torn": 5,
+            "Temps Per paquet": 7,
+            "Temps entre rutes": 10,
+            "Marge abans - W": 10,
+            "Marge despres - W": 5,
+            "Marge abans - No W": 25,
+            "Marge despres - No W": 15,
+            "Temps maxim espera": 20,
+            "Marge primera ruta torn": 10,
+            "Maxim Hores Global": 9,
+            "Flexibilitat +6": 0.10,
+            "Flexibilitat +4": 0.20,
+            "Flexibilitat -4": 0.20,
+            "Pes Trike": 120
+        }
+
+def save_data(data, file_path):
+    """Save data to a JSON file."""
+    with open(file_path, 'w') as file:
+        json.dump(data, file, indent=4)
+
 
 if __name__ == "__main__":
     st.set_page_config(layout="wide")
@@ -117,55 +150,48 @@ if __name__ == "__main__":
     #columns
     col1, col2 = st.columns(2)
 
-    hipotesi = {} #Info about all variable to show later on the excel
+    # File path to store data
+    file_path = 'variables.json'
+
+    # Load data from the file
+    hipotesi = load_data(file_path)
 
     with col1:
-
-        #time to start shift
-        timeToStartShift = int(st.text_input("Temps abans de començar el torn", 12))
+        timeToStartShift = int(st.text_input("Temps abans de començar el torn", hipotesi["Temps Inici Torn"]))
         hipotesi["Temps Inici Torn"] = timeToStartShift
-        #time to end Shift
-        timeToEndShift = int(st.text_input("Temps després d'acabar el torn", 5))
+        timeToEndShift = int(st.text_input("Temps després d'acabar el torn", hipotesi["Temps Fi Torn"]))
         hipotesi["Temps Fi Torn"] = timeToEndShift
-        #time between deliveries
-        timeForDelivery = int(st.text_input("Temps per entrega", 7))
+        timeForDelivery = int(st.text_input("Temps per entrega", hipotesi["Temps Per paquet"]))
         hipotesi["Temps Per paquet"] = timeForDelivery
-        #time between routes
-        timeBetweenRoutes = int(st.text_input("Temps entre rutes", 10))
+        timeBetweenRoutes = int(st.text_input("Temps entre rutes", hipotesi["Temps entre rutes"]))
         hipotesi["Temps entre rutes"] = timeBetweenRoutes
-        #Represents the amount of time by which one departs earlier than the scheduled departure time
-        earlyDepartureTimeMarginPriority = int(st.text_input("Marge de temps de sortida abans del previst - RUTES PRIORITARIES", 10))
+        earlyDepartureTimeMarginPriority = int(st.text_input("Marge de temps de sortida abans del previst - RUTES PRIORITARIES", hipotesi["Marge abans - W"]))
         hipotesi["Marge abans - W"] = earlyDepartureTimeMarginPriority
-        #Represents the amount of time by which one departs later than the scheduled departure time
-        delayedDepartureTimeMarginPriority = int(st.text_input("Marge de temps de sortida despres del previst - RUTES PRIORITARIES", 5))
+        delayedDepartureTimeMarginPriority = int(st.text_input("Marge de temps de sortida despres del previst - RUTES PRIORITARIES", hipotesi["Marge despres - W"]))
         hipotesi["Marge despres - W"] = delayedDepartureTimeMarginPriority
-        #Represents the amount of time by which one departs earlier than the scheduled departure time
-        earlyDepartureTimeMarginNoPriority= int(st.text_input("Marge de temps de sortida abans del previst - RUTES NO PRIORITARIES", 25))
+        earlyDepartureTimeMarginNoPriority = int(st.text_input("Marge de temps de sortida abans del previst - RUTES NO PRIORITARIES", hipotesi["Marge abans - No W"]))
         hipotesi["Marge abans - No W"] = earlyDepartureTimeMarginNoPriority
-        #Represents the amount of time by which one departs later than the scheduled departure time
-        delayedDepartureTimeMarginNoPriority = int(st.text_input("Marge de temps de sortida despres del previst - RUTES NO PRIORITARIES", 15))
+        delayedDepartureTimeMarginNoPriority = int(st.text_input("Marge de temps de sortida despres del previst - RUTES NO PRIORITARIES", hipotesi["Marge despres - No W"]))
         hipotesi["Marge despres - No W"] = delayedDepartureTimeMarginNoPriority
 
     with col2:
-
-        #Maximum time before an worker gets assigned another route
-        maxWaitTimeBetweenRoutes = int(st.text_input("Màxim temps d'espera entre rutes", 20))
+        maxWaitTimeBetweenRoutes = int(st.text_input("Màxim temps d'espera entre rutes", hipotesi["Temps maxim espera"]))
         hipotesi["Temps maxim espera"] = maxWaitTimeBetweenRoutes
-        #max time to enter the first route early
-        firstRouteMaxEarlyDepartureTime = int(st.text_input("Marge de temps de sortida abans del previst de la primera ruta del torn", 10))
+        firstRouteMaxEarlyDepartureTime = int(st.text_input("Marge de temps de sortida abans del previst de la primera ruta del torn", hipotesi["Marge primera ruta torn"]))
         hipotesi["Marge primera ruta torn"] = firstRouteMaxEarlyDepartureTime
-        #Global maximum of working hours
-        globalMaxhours = int(st.text_input("Maximes hores globals per treballador", 9))
+        globalMaxhours = int(st.text_input("Maximes hores globals per treballador", hipotesi["Maxim Hores Global"]))
         hipotesi["Maxim Hores Global"] = globalMaxhours
-        #extra hours
-        extra6hours = int(st.text_input("flexibilitat horaria treballadors +6", 10))/100
+        extra6hours = int(st.text_input("flexibilitat horaria treballadors +6", int(hipotesi["Flexibilitat +6"] * 100))) / 100
         hipotesi["Flexibilitat +6"] = extra6hours
-        extra4hours = int(st.text_input("flexibilitat horaria treballadors +4", 20))/100
+        extra4hours = int(st.text_input("flexibilitat horaria treballadors +4", int(hipotesi["Flexibilitat +4"] * 100))) / 100
         hipotesi["Flexibilitat +4"] = extra4hours
-        extra0hours = int(st.text_input("flexibilitat horaria treballadors menys de 4 hores", 20))/100
+        extra0hours = int(st.text_input("flexibilitat horaria treballadors menys de 4 hores", int(hipotesi["Flexibilitat -4"] * 100))) / 100
         hipotesi["Flexibilitat -4"] = extra0hours
-        pesTrike = int(st.text_input("Pes trike", 120))
+        pesTrike = int(st.text_input("Pes trike", hipotesi["Pes Trike"]))
         hipotesi["Pes Trike"] = pesTrike
+
+
+    save_data(hipotesi, file_path)
 
     colSants, colNapols = st.columns(2)
 

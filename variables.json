@@ -1,0 +1,17 @@
+{
+    "Temps Inici Torn": 12,
+    "Temps Fi Torn": 5,
+    "Temps Per paquet": 7,
+    "Temps entre rutes": 10,
+    "Marge abans - W": 10,
+    "Marge despres - W": 5,
+    "Marge abans - No W": 25,
+    "Marge despres - No W": 15,
+    "Temps maxim espera": 20,
+    "Marge primera ruta torn": 10,
+    "Maxim Hores Global": 9,
+    "Flexibilitat +6": 0.1,
+    "Flexibilitat +4": 0.2,
+    "Flexibilitat -4": 0.2,
+    "Pes Trike": 125
+}
