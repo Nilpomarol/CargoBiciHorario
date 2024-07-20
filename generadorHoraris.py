@@ -256,6 +256,156 @@ def process_user_inputs():
 
 
 
+# def calculate_worker_availability(dfj, workers, database_workers, timeForDelivery, timeBetweenRoutes, globalMaxhours, timeToStartShift, timeToEndShift, earlyDepartureTimeMarginPriority, delayedDepartureTimeMarginPriority, earlyDepartureTimeMarginNoPriority, delayedDepartureTimeMarginNoPriority, maxWaitTimeBetweenRoutes, firstRouteMaxEarlyDepartureTime):
+#     """Calculate worker availability and route assignments."""
+#     pre_dft = []
+#     totalworkers = 0
+#     timeline = {}
+#     dfj_general = []
+
+#     dfj_hub = dfj.groupby("Hub")
+#     for hub, dfj in dfj_hub:
+#         #sort by delivery exit time
+#         dfj = dfj.sort_values(by="order")
+        
+
+#         #sorts entries by Hub and Start Time
+
+#         for index, row in dfj.iterrows():
+#             #worker asigned to the route
+#             asignedTo = -1
+#             #expected initial time of the route
+#             expectedInitialTime = horaToInt(row["Hora Inici Ruta Plnif"])
+            
+#             if row["Prioritari"]:
+#                 maxDelayedInitialTime = expectedInitialTime + delayedDepartureTimeMarginPriority #maximum late time to start the route
+#                 maxEarlyInitialTime = expectedInitialTime - earlyDepartureTimeMarginPriority #maximum early time to start the route
+#             else:
+#                 maxDelayedInitialTime = expectedInitialTime + delayedDepartureTimeMarginNoPriority  #maximum late time to start the route with added non-priority margin
+#                 maxEarlyInitialTime = expectedInitialTime - earlyDepartureTimeMarginNoPriority #maximum early time to start the route with added non-priority margin
+                
+#             #time to complete the route
+#             timeToCompleteRoute = row["Temps Recorregut Ruta"] + row["Num Entregues"] * timeForDelivery
+#             dfj.at[index, "Temps Total Ruta"] = timeToCompleteRoute
+#             #end time of the route
+#             endTime = horaToInt(row["Hora Fi Ruta"]) + timeBetweenRoutes
+
+#             for t, value in workers.items(): #check if any worker is available   
+
+#                 available = value[0] < maxDelayedInitialTime #check if worker has ended route before max delayed time
+                
+#                 if t in database_workers:
+#                     hoursLeftShift = (pre_dft[value[1]][4] + timeToCompleteRoute/60) <= min(database_workers[t][1], globalMaxhours) #Hours left to the shift
+#                 else: 
+#                     hoursLeftShift = (pre_dft[value[1]][4] + timeToCompleteRoute/60) <= globalMaxhours
+
+#                 exceededMaxWaitTime = (maxEarlyInitialTime - value[0]) < maxWaitTimeBetweenRoutes #worker waiting without a route
+
+#                 correctHub = workers[t][2] == row['Hub']
+
+#                 if available and hoursLeftShift and exceededMaxWaitTime and correctHub:
+
+#                     #assign the job to worker t, and update the corresponding data structures
+#                     asignedTo = t
+
+#                     routeStartTime = max(value[0], maxEarlyInitialTime) #Start time of the route
+
+#                     dfj.at[index, "Hora Inici Ruta Real"] = intToHora(routeStartTime) #update the table with the actual start time of the route
+                    
+#                     endTime = routeStartTime + timeToCompleteRoute + timeBetweenRoutes #time when the worker can start the next route
+
+#                     dfj.at[index, "Hora Fi Ruta"] = intToHora(routeStartTime + timeToCompleteRoute) #update the table with the actual end time of the route
+#                     dfj.at[index, "Plnif vs Real Min"] = -(horaToInt(row["Hora Inici Ruta Plnif"]) - routeStartTime) #difference of starting time between plan and actual
+#                     dfj.at[index, "Inici Seguent Ruta"] = intToHora(endTime) #time at which the worker that did this route is available for the next one
+
+#                     workers[t] = (endTime, value[1], value[2])
+                    
+#                     pre_dft[value[1]][3] = intToHora(routeStartTime + timeToCompleteRoute + timeToEndShift) #update the provisional end of the shift
+#                     pre_dft[value[1]][4] = round((horaToInt(pre_dft[value[1]][3]) - horaToInt(pre_dft[value[1]][2]))/60,1) #update the total hours worked
+                    
+#                     waitingTime = routeStartTime-(horaToInt(timeline[asignedTo][-1][2])+10)
+#                     timeline[asignedTo][-1] = (timeline[asignedTo][-1][0], timeline[asignedTo][-1][1], intToHora(horaToInt(timeline[asignedTo][-1][2])+10), timeline[asignedTo][-1][3])
+#                     timeline[asignedTo].append((row["Id"].split()[0],intToHora(routeStartTime), intToHora(routeStartTime + timeToCompleteRoute), waitingTime))
+                    
+#                     break
+                    
+                    
+
+#             if asignedTo == -1: #No worker is available, then, add another worker
+                
+#                 maxEarlyInitialTime = expectedInitialTime - firstRouteMaxEarlyDepartureTime #Start time of the route
+
+#                 dfj.at[index, "Hora Inici Ruta Real"] = intToHora(maxEarlyInitialTime) #update the table with the actual start time of the route
+
+#                 endTime = maxEarlyInitialTime + timeToCompleteRoute + timeBetweenRoutes #time when the worker can start the next route
+                
+#                 dfj.at[index, "Hora Fi Ruta"] = intToHora(maxEarlyInitialTime + timeToCompleteRoute)
+#                 dfj.at[index, "Plnif vs Real Min"] = -(horaToInt(row["Hora Inici Ruta Plnif"]) - maxEarlyInitialTime) #difference of starting time between plan and actual
+#                 dfj.at[index, "Inici Seguent Ruta"] = intToHora(endTime) #time at which the worker that did this route is available for the next one
+
+#                 id = totalworkers #New worker assigned to this route
+#                 workers[id] = (endTime, len(pre_dft), row['Hub']) #add it to the dict with the active workers and their last route end time
+
+#                 startShift= maxEarlyInitialTime - timeToStartShift
+#                 #time it would end the shift if no more routes would be done
+#                 provisionalEndShift = maxEarlyInitialTime + timeToCompleteRoute + timeToEndShift
+#                 provisionalShiftHours = round((provisionalEndShift - startShift)/60,1)
+
+#                 newWorker = [row["Hub"], id, intToHora(startShift), intToHora(provisionalEndShift), provisionalShiftHours]
+                
+#                 pre_dft.append(newWorker) #add worker to the database
+
+#                 timeline[id] = [(row["Id"].split()[0],intToHora(maxEarlyInitialTime), intToHora(maxEarlyInitialTime + timeToCompleteRoute), "")]
+
+#                 asignedTo = id
+#                 totalworkers += 1
+
+
+
+#             dfj.at[index, "Assignacio Prov"] = asignedTo
+#         #add the modified dataframe with the assignments to the list of dataframes
+#         dfj_general.append(dfj)
+
+#     dft = pd.DataFrame(pre_dft, columns=['Hub', 'worker', 'Hora Inici Torn', 'Hora Final Torn', 'Hores Totals'])
+
+#     dft = dft.sort_values(by='Hores Totals', ascending=False)
+    
+#     idToWorker = {}
+#     i = 0
+
+
+#     #Assign workers to the shift the best fits their hours
+
+#     dft.insert(1, "Treballador", '')
+#     extraWorkers = 65
+
+#     for index, row in dft.iterrows():
+#         if i in database_workers:
+#             idToWorker[row["worker"]] = database_workers[i][0]
+#         else:
+#             idToWorker[row["worker"]] = chr(extraWorkers)
+#             extraWorkers += 1
+#         dft.at[index, "Treballador"] = idToWorker[row["worker"]]
+
+#         i += 1
+    
+#     dft = dft.drop("worker", axis=1)
+
+#     #Add the names of the workers to the assignments
+#     dfj = pd.concat(dfj_general)
+#     dfj = dfj.drop("order", axis=1)
+#     i = 0
+
+#     for index, row in dfj.iterrows():
+#         dfj.at[index, "Assignació"] = idToWorker[row["Assignacio Prov"]]
+#         if row["Assignacio Prov"] in timeline:
+#             timeline[idToWorker[row["Assignacio Prov"]]] = timeline.pop(row["Assignacio Prov"])
+
+#     dfj = dfj.drop("Assignacio Prov", axis=1)
+    
+#     return dfj, dft, timeline
+
+
 def calculate_worker_availability(dfj, workers, database_workers, timeForDelivery, timeBetweenRoutes, globalMaxhours, timeToStartShift, timeToEndShift, earlyDepartureTimeMarginPriority, delayedDepartureTimeMarginPriority, earlyDepartureTimeMarginNoPriority, delayedDepartureTimeMarginNoPriority, maxWaitTimeBetweenRoutes, firstRouteMaxEarlyDepartureTime):
     """Calculate worker availability and route assignments."""
     pre_dft = []
@@ -263,17 +413,26 @@ def calculate_worker_availability(dfj, workers, database_workers, timeForDeliver
     timeline = {}
     dfj_general = []
 
+    
+    trikesInHub = {}
+    fourWheelsInHub = {}
+
+
     dfj_hub = dfj.groupby("Hub")
     for hub, dfj in dfj_hub:
         #sort by delivery exit time
         dfj = dfj.sort_values(by="order")
-        
-
+        trikeDisponibility = {}
+        fourWheelsDisponibility = {}
+        numberTrikes = 0
+        number4Wheels = 0
         #sorts entries by Hub and Start Time
 
         for index, row in dfj.iterrows():
+
             #worker asigned to the route
             asignedTo = -1
+            bikeType = row["Tipus Bici"]
             #expected initial time of the route
             expectedInitialTime = horaToInt(row["Hora Inici Ruta Plnif"])
             
@@ -290,9 +449,7 @@ def calculate_worker_availability(dfj, workers, database_workers, timeForDeliver
             #end time of the route
             endTime = horaToInt(row["Hora Fi Ruta"]) + timeBetweenRoutes
 
-            for t, value in workers.items(): #check if any worker is available
-                
-                
+            for t, value in workers.items(): #check if any worker is available   
 
                 available = value[0] < maxDelayedInitialTime #check if worker has ended route before max delayed time
                 
@@ -329,6 +486,8 @@ def calculate_worker_availability(dfj, workers, database_workers, timeForDeliver
                     timeline[asignedTo][-1] = (timeline[asignedTo][-1][0], timeline[asignedTo][-1][1], intToHora(horaToInt(timeline[asignedTo][-1][2])+10), timeline[asignedTo][-1][3])
                     timeline[asignedTo].append((row["Id"].split()[0],intToHora(routeStartTime), intToHora(routeStartTime + timeToCompleteRoute), waitingTime))
                     
+                    number4Wheels, numberTrikes, fourWheelsDisponibility, trikeDisponibility = updateBikeAssignment(timeBetweenRoutes, numberTrikes, number4Wheels, trikeDisponibility, fourWheelsDisponibility, row, bikeType, endTime, routeStartTime)
+
                     break
                     
                     
@@ -362,11 +521,13 @@ def calculate_worker_availability(dfj, workers, database_workers, timeForDeliver
                 asignedTo = id
                 totalworkers += 1
 
-
+                number4Wheels, numberTrikes, fourWheelsDisponibility, trikeDisponibility = updateBikeAssignment(timeBetweenRoutes, numberTrikes, number4Wheels, trikeDisponibility, fourWheelsDisponibility, row, bikeType, endTime, maxEarlyInitialTime)
 
             dfj.at[index, "Assignacio Prov"] = asignedTo
         #add the modified dataframe with the assignments to the list of dataframes
         dfj_general.append(dfj)
+        trikesInHub[hub] = numberTrikes
+        fourWheelsInHub[hub] = number4Wheels
 
     dft = pd.DataFrame(pre_dft, columns=['Hub', 'worker', 'Hora Inici Torn', 'Hora Final Torn', 'Hores Totals'])
 
@@ -405,11 +566,34 @@ def calculate_worker_availability(dfj, workers, database_workers, timeForDeliver
 
     dfj = dfj.drop("Assignacio Prov", axis=1)
     
-    return dfj, dft, timeline
+    return dfj, dft, timeline, trikesInHub, fourWheelsInHub
+
+def updateBikeAssignment(timeBetweenRoutes, numberTrikes, number4Wheels, trikeDisponibility, fourWheelsDisponibility, row, bikeType, endTime, routeStartTime):
+    asignedbike = False
+                    
+    if bikeType == "Trike":
+        for index, trike in trikeDisponibility.items():
+            if trike[0] <= routeStartTime:
+                trike[0] = endTime - timeBetweenRoutes
+                asignedbike = True
+                break
+        if not asignedbike:
+            trikeDisponibility[numberTrikes] = [endTime - timeBetweenRoutes, row['Hub']]
+            numberTrikes += 1
+    else:
+        for index, fourWheels in fourWheelsDisponibility.items():
+            if fourWheels[0] <= routeStartTime:
+                fourWheels[0] = endTime - timeBetweenRoutes
+                asignedbike = True
+                break
+        if not asignedbike:
+            fourWheelsDisponibility[number4Wheels] = [endTime - timeBetweenRoutes, row['Hub']]
+            number4Wheels += 1
+    return number4Wheels, numberTrikes, fourWheelsDisponibility, trikeDisponibility
 
 
 
-def generate_excel_file(dfj, dft, workers_sants, workers_napols, additionalInfoList, hipotesi, timeline, workerList):
+def generate_excel_file(dfj, dft, workers_sants, workers_napols, additionalInfoList, hipotesi, timeline, workerList, numberTrikes, number4Wheels):
     """Generate and format the Excel file."""
     wb = opxl.Workbook()
     wb.save('output.xlsx')
@@ -490,11 +674,17 @@ def generate_excel_file(dfj, dft, workers_sants, workers_napols, additionalInfoL
         row_number += 1
         sheet.cell(row=row_number, column=5).value = "Trikes"
         sheet.cell(row=row_number, column=6).value = data[5]
-        sheet.cell(row=row_number, column=7).value = f"=F{row_number}/F{row_number-2}"
+        sheet.cell(row=row_number, column=7).value = f"=F{row_number}/F{row_number-2}"   
         row_number += 1
         sheet.cell(row=row_number, column=5).value = "4 Wheeler"
         sheet.cell(row=row_number, column=6).value = data[1] - data[5]
         sheet.cell(row=row_number, column=7).value = f"=F{row_number}/F{row_number-3}"
+        row_number += 1
+        sheet.cell(row=row_number, column=5).value = "Trikes Min En Hub"
+        sheet.cell(row=row_number, column=6).value = numberTrikes[hub]
+        row_number += 1
+        sheet.cell(row=row_number, column=5).value = "4 Wheeler Min En Hub"
+        sheet.cell(row=row_number, column=6).value = number4Wheels[hub]
         row_number += 1
 
         cellRangeString = 'O' + str(row_number + 5) + ':O' + str(row_number + 5 + len(dfj_group.get_group(data[0])))
@@ -543,7 +733,7 @@ def generate_excel_file(dfj, dft, workers_sants, workers_napols, additionalInfoL
 
 
 
-def display_ui(dfj, dft, timeline):
+def display_ui(dfj, dft, timeline, numberTrikes, number4Wheels):
     """Display the Streamlit UI components."""
     col3, cols = st.columns(2)
     dft_grouped = dft.groupby("Hub")
@@ -567,6 +757,8 @@ def display_ui(dfj, dft, timeline):
         # Display information in columns
         with (col3 if hub == "Sants" else cols):
             st.write(f"Informació per al Hub: {hub}")
+            st.write(f"Trikes: {numberTrikes[hub]}")
+            st.write(f"4Wheeler: {number4Wheels[hub]}")
             col5, col6, col7, col8 = st.columns(4)
             with col5:
                 st.write(f"Hores Totals: {total_hours:.1f}")
@@ -610,7 +802,7 @@ def main():
         workers_sants = process_workers(workers_sants_table, weekday) if workers_sants_table else None
         workers_napols = process_workers(workers_napols_table, weekday) if workers_napols_table else None
 
-        dfj, dft, timeline = calculate_worker_availability(
+        dfj, dft, timeline,numberTrikes, number4Wheels = calculate_worker_availability(
             dfj_hub,
             {},  # Replace with actual worker data
             {},  # Replace with actual database worker data
@@ -628,8 +820,8 @@ def main():
         )
 
         
-        additional_info_list = display_ui(dfj, dft, timeline)
-        generate_excel_file(dfj, dft, workers_sants, workers_napols, additional_info_list, hipotesi, timeline, {})
+        additional_info_list = display_ui(dfj, dft, timeline, numberTrikes, number4Wheels)
+        generate_excel_file(dfj, dft, workers_sants, workers_napols, additional_info_list, hipotesi, timeline, {}, numberTrikes, number4Wheels)
 
         with col4:
             st.write("")
