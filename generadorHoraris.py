@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import openpyxl as opxl
+from openpyxl.styles import NamedStyle
 from datetime import datetime
 import json
 import os
@@ -61,13 +62,14 @@ def process_routes(routes_table, time_for_delivery, pes_trike):
 
             # Determine priority and bike type
             is_priority = ' w ' in route_elements[0].lower()
-            bike_type = "Trike" if int(route_elements[9]) <= pes_trike else "4 wheels"
+            bike_type = "TRIKE" if int(route_elements[9]) <= pes_trike else "4W"
 
             # Create a processed route entry
             processed_route = [
                 route_elements[0],  # Route identifier
                 is_priority,  # Priority flag
-                bike_type,  # Bike type
+                bike_type,# Bike type
+                int(route_elements[9]),  # Weight
                 route_elements[2],  # Route detail
                 route_elements[10],  # Additional detail
                 route_elements[3],  # Departure time
@@ -253,159 +255,6 @@ def process_user_inputs():
     save_data(hipotesi, file_path)
     return hipotesi, col4
 
-
-
-
-# def calculate_worker_availability(dfj, workers, database_workers, timeForDelivery, timeBetweenRoutes, globalMaxhours, timeToStartShift, timeToEndShift, earlyDepartureTimeMarginPriority, delayedDepartureTimeMarginPriority, earlyDepartureTimeMarginNoPriority, delayedDepartureTimeMarginNoPriority, maxWaitTimeBetweenRoutes, firstRouteMaxEarlyDepartureTime):
-#     """Calculate worker availability and route assignments."""
-#     pre_dft = []
-#     totalworkers = 0
-#     timeline = {}
-#     dfj_general = []
-
-#     dfj_hub = dfj.groupby("Hub")
-#     for hub, dfj in dfj_hub:
-#         #sort by delivery exit time
-#         dfj = dfj.sort_values(by="order")
-        
-
-#         #sorts entries by Hub and Start Time
-
-#         for index, row in dfj.iterrows():
-#             #worker asigned to the route
-#             asignedTo = -1
-#             #expected initial time of the route
-#             expectedInitialTime = horaToInt(row["Hora Inici Ruta Plnif"])
-            
-#             if row["Prioritari"]:
-#                 maxDelayedInitialTime = expectedInitialTime + delayedDepartureTimeMarginPriority #maximum late time to start the route
-#                 maxEarlyInitialTime = expectedInitialTime - earlyDepartureTimeMarginPriority #maximum early time to start the route
-#             else:
-#                 maxDelayedInitialTime = expectedInitialTime + delayedDepartureTimeMarginNoPriority  #maximum late time to start the route with added non-priority margin
-#                 maxEarlyInitialTime = expectedInitialTime - earlyDepartureTimeMarginNoPriority #maximum early time to start the route with added non-priority margin
-                
-#             #time to complete the route
-#             timeToCompleteRoute = row["Temps Recorregut Ruta"] + row["Num Entregues"] * timeForDelivery
-#             dfj.at[index, "Temps Total Ruta"] = timeToCompleteRoute
-#             #end time of the route
-#             endTime = horaToInt(row["Hora Fi Ruta"]) + timeBetweenRoutes
-
-#             for t, value in workers.items(): #check if any worker is available   
-
-#                 available = value[0] < maxDelayedInitialTime #check if worker has ended route before max delayed time
-                
-#                 if t in database_workers:
-#                     hoursLeftShift = (pre_dft[value[1]][4] + timeToCompleteRoute/60) <= min(database_workers[t][1], globalMaxhours) #Hours left to the shift
-#                 else: 
-#                     hoursLeftShift = (pre_dft[value[1]][4] + timeToCompleteRoute/60) <= globalMaxhours
-
-#                 exceededMaxWaitTime = (maxEarlyInitialTime - value[0]) < maxWaitTimeBetweenRoutes #worker waiting without a route
-
-#                 correctHub = workers[t][2] == row['Hub']
-
-#                 if available and hoursLeftShift and exceededMaxWaitTime and correctHub:
-
-#                     #assign the job to worker t, and update the corresponding data structures
-#                     asignedTo = t
-
-#                     routeStartTime = max(value[0], maxEarlyInitialTime) #Start time of the route
-
-#                     dfj.at[index, "Hora Inici Ruta Real"] = intToHora(routeStartTime) #update the table with the actual start time of the route
-                    
-#                     endTime = routeStartTime + timeToCompleteRoute + timeBetweenRoutes #time when the worker can start the next route
-
-#                     dfj.at[index, "Hora Fi Ruta"] = intToHora(routeStartTime + timeToCompleteRoute) #update the table with the actual end time of the route
-#                     dfj.at[index, "Plnif vs Real Min"] = -(horaToInt(row["Hora Inici Ruta Plnif"]) - routeStartTime) #difference of starting time between plan and actual
-#                     dfj.at[index, "Inici Seguent Ruta"] = intToHora(endTime) #time at which the worker that did this route is available for the next one
-
-#                     workers[t] = (endTime, value[1], value[2])
-                    
-#                     pre_dft[value[1]][3] = intToHora(routeStartTime + timeToCompleteRoute + timeToEndShift) #update the provisional end of the shift
-#                     pre_dft[value[1]][4] = round((horaToInt(pre_dft[value[1]][3]) - horaToInt(pre_dft[value[1]][2]))/60,1) #update the total hours worked
-                    
-#                     waitingTime = routeStartTime-(horaToInt(timeline[asignedTo][-1][2])+10)
-#                     timeline[asignedTo][-1] = (timeline[asignedTo][-1][0], timeline[asignedTo][-1][1], intToHora(horaToInt(timeline[asignedTo][-1][2])+10), timeline[asignedTo][-1][3])
-#                     timeline[asignedTo].append((row["Id"].split()[0],intToHora(routeStartTime), intToHora(routeStartTime + timeToCompleteRoute), waitingTime))
-                    
-#                     break
-                    
-                    
-
-#             if asignedTo == -1: #No worker is available, then, add another worker
-                
-#                 maxEarlyInitialTime = expectedInitialTime - firstRouteMaxEarlyDepartureTime #Start time of the route
-
-#                 dfj.at[index, "Hora Inici Ruta Real"] = intToHora(maxEarlyInitialTime) #update the table with the actual start time of the route
-
-#                 endTime = maxEarlyInitialTime + timeToCompleteRoute + timeBetweenRoutes #time when the worker can start the next route
-                
-#                 dfj.at[index, "Hora Fi Ruta"] = intToHora(maxEarlyInitialTime + timeToCompleteRoute)
-#                 dfj.at[index, "Plnif vs Real Min"] = -(horaToInt(row["Hora Inici Ruta Plnif"]) - maxEarlyInitialTime) #difference of starting time between plan and actual
-#                 dfj.at[index, "Inici Seguent Ruta"] = intToHora(endTime) #time at which the worker that did this route is available for the next one
-
-#                 id = totalworkers #New worker assigned to this route
-#                 workers[id] = (endTime, len(pre_dft), row['Hub']) #add it to the dict with the active workers and their last route end time
-
-#                 startShift= maxEarlyInitialTime - timeToStartShift
-#                 #time it would end the shift if no more routes would be done
-#                 provisionalEndShift = maxEarlyInitialTime + timeToCompleteRoute + timeToEndShift
-#                 provisionalShiftHours = round((provisionalEndShift - startShift)/60,1)
-
-#                 newWorker = [row["Hub"], id, intToHora(startShift), intToHora(provisionalEndShift), provisionalShiftHours]
-                
-#                 pre_dft.append(newWorker) #add worker to the database
-
-#                 timeline[id] = [(row["Id"].split()[0],intToHora(maxEarlyInitialTime), intToHora(maxEarlyInitialTime + timeToCompleteRoute), "")]
-
-#                 asignedTo = id
-#                 totalworkers += 1
-
-
-
-#             dfj.at[index, "Assignacio Prov"] = asignedTo
-#         #add the modified dataframe with the assignments to the list of dataframes
-#         dfj_general.append(dfj)
-
-#     dft = pd.DataFrame(pre_dft, columns=['Hub', 'worker', 'Hora Inici Torn', 'Hora Final Torn', 'Hores Totals'])
-
-#     dft = dft.sort_values(by='Hores Totals', ascending=False)
-    
-#     idToWorker = {}
-#     i = 0
-
-
-#     #Assign workers to the shift the best fits their hours
-
-#     dft.insert(1, "Treballador", '')
-#     extraWorkers = 65
-
-#     for index, row in dft.iterrows():
-#         if i in database_workers:
-#             idToWorker[row["worker"]] = database_workers[i][0]
-#         else:
-#             idToWorker[row["worker"]] = chr(extraWorkers)
-#             extraWorkers += 1
-#         dft.at[index, "Treballador"] = idToWorker[row["worker"]]
-
-#         i += 1
-    
-#     dft = dft.drop("worker", axis=1)
-
-#     #Add the names of the workers to the assignments
-#     dfj = pd.concat(dfj_general)
-#     dfj = dfj.drop("order", axis=1)
-#     i = 0
-
-#     for index, row in dfj.iterrows():
-#         dfj.at[index, "Assignació"] = idToWorker[row["Assignacio Prov"]]
-#         if row["Assignacio Prov"] in timeline:
-#             timeline[idToWorker[row["Assignacio Prov"]]] = timeline.pop(row["Assignacio Prov"])
-
-#     dfj = dfj.drop("Assignacio Prov", axis=1)
-    
-#     return dfj, dft, timeline
-
-
 def calculate_worker_availability(dfj, workers, database_workers, timeForDelivery, timeBetweenRoutes, globalMaxhours, timeToStartShift, timeToEndShift, earlyDepartureTimeMarginPriority, delayedDepartureTimeMarginPriority, earlyDepartureTimeMarginNoPriority, delayedDepartureTimeMarginNoPriority, maxWaitTimeBetweenRoutes, firstRouteMaxEarlyDepartureTime):
     """Calculate worker availability and route assignments."""
     pre_dft = []
@@ -570,8 +419,8 @@ def calculate_worker_availability(dfj, workers, database_workers, timeForDeliver
 
 def updateBikeAssignment(timeBetweenRoutes, numberTrikes, number4Wheels, trikeDisponibility, fourWheelsDisponibility, row, bikeType, endTime, routeStartTime):
     asignedbike = False
-                    
-    if bikeType == "Trike":
+    
+    if bikeType == "TRIKE":
         for index, trike in trikeDisponibility.items():
             if trike[0] <= routeStartTime:
                 trike[0] = endTime - timeBetweenRoutes
@@ -591,6 +440,22 @@ def updateBikeAssignment(timeBetweenRoutes, numberTrikes, number4Wheels, trikeDi
             number4Wheels += 1
     return number4Wheels, numberTrikes, fourWheelsDisponibility, trikeDisponibility
 
+def adjust_column_widths(ws):
+    for col in ws.columns:
+        max_length = 0
+        column = col[0].column_letter  # Get the column name
+        
+        # Find the maximum length of the content in each cell
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(cell.value)
+            except:
+                pass
+        
+        # Set the column width
+        adjusted_width = (max_length + 2)
+        ws.column_dimensions[column].width = adjusted_width
 
 
 def generate_excel_file(dfj, dft, workers_sants, workers_napols, additionalInfoList, hipotesi, timeline, workerList, numberTrikes, number4Wheels):
@@ -639,6 +504,9 @@ def generate_excel_file(dfj, dft, workers_sants, workers_napols, additionalInfoL
 
     try:
         wb = opxl.load_workbook('output.xlsx')
+        # Create a NamedStyle for the percentage format
+        percentage_style = NamedStyle(name="percentage_style", number_format='0.00%')
+
     except Exception as e:
         print(f"Error loading the Excel file: {e}")
         wb = opxl.Workbook()
@@ -656,8 +524,7 @@ def generate_excel_file(dfj, dft, workers_sants, workers_napols, additionalInfoL
         row_number = data[3] + 2
         column_letter = 'G'
         formula = f"=SUM({column_letter}3:{column_letter}{row_number})"
-        row_number += 1
-        row_number += 1
+        row_number += 3
         sheet.cell(row=row_number, column=5).value = "Total Hores"
         sheet.cell(row=row_number, column=6).value = formula
         sheet.cell(row=row_number, column=11).value = "Total Hores"
@@ -671,20 +538,22 @@ def generate_excel_file(dfj, dft, workers_sants, workers_napols, additionalInfoL
         row_number += 1
         sheet.cell(row=row_number, column=5).value = "Total Paquets"
         sheet.cell(row=row_number, column=6).value = data[4]
+        row_number += -1
+        sheet.cell(row=row_number, column=9).value = "TRIKES"
+        sheet.cell(row=row_number, column=10).value = data[5]
+        sheet.cell(row=row_number, column=11).value = f"=J{row_number}/F{row_number}"
+        sheet.cell(row=row_number, column=11).style = percentage_style   
         row_number += 1
-        sheet.cell(row=row_number, column=5).value = "Trikes"
-        sheet.cell(row=row_number, column=6).value = data[5]
-        sheet.cell(row=row_number, column=7).value = f"=F{row_number}/F{row_number-2}"   
+        sheet.cell(row=row_number, column=9).value = "4W"
+        sheet.cell(row=row_number, column=10).value = data[1] - data[5]
+        sheet.cell(row=row_number, column=11).value = f"=J{row_number}/F{row_number-1}"
+        sheet.cell(row=row_number, column=11).style = percentage_style
         row_number += 1
-        sheet.cell(row=row_number, column=5).value = "4 Wheeler"
-        sheet.cell(row=row_number, column=6).value = data[1] - data[5]
-        sheet.cell(row=row_number, column=7).value = f"=F{row_number}/F{row_number-3}"
+        sheet.cell(row=row_number, column=9).value = "TRIKES Min"
+        sheet.cell(row=row_number, column=10).value = numberTrikes[hub]
         row_number += 1
-        sheet.cell(row=row_number, column=5).value = "Trikes Min En Hub"
-        sheet.cell(row=row_number, column=6).value = numberTrikes[hub]
-        row_number += 1
-        sheet.cell(row=row_number, column=5).value = "4 Wheeler Min En Hub"
-        sheet.cell(row=row_number, column=6).value = number4Wheels[hub]
+        sheet.cell(row=row_number, column=9).value = "4w  Min"
+        sheet.cell(row=row_number, column=10).value = number4Wheels[hub]
         row_number += 1
 
         cellRangeString = 'O' + str(row_number + 5) + ':O' + str(row_number + 5 + len(dfj_group.get_group(data[0])))
@@ -728,6 +597,11 @@ def generate_excel_file(dfj, dft, workers_sants, workers_napols, additionalInfoL
         sheet.cell(row=row_number, column=2).value = key
         sheet.cell(row=row_number, column=3).value = hipotesi[key]
         row_number += 1
+        
+    # Loop through each sheet in the workbook and adjust sizes
+    for sheet in wb.worksheets:
+        adjust_column_widths(sheet)
+
 
     wb.save('output.xlsx')
 
@@ -750,15 +624,15 @@ def display_ui(dfj, dft, timeline, numberTrikes, number4Wheels):
         workers_in_hub = len(dft_hub)
         number_deliveries = len(dfj[dfj["Hub"] == hub])
         number_packages = dfj[dfj["Hub"] == hub]["Num Entregues"].sum()
-        trike_bikes = len(dfj[(dfj["Hub"] == hub) & (dfj["Tipus Bici"] == "Trike")])
+        trike_bikes = len(dfj[(dfj["Hub"] == hub) & (dfj["Tipus Bici"] == "TRIKE")])
 
         additional_info_list.append((hub, number_deliveries, total_hours, workers_in_hub, number_packages, trike_bikes))
         
         # Display information in columns
         with (col3 if hub == "Sants" else cols):
             st.write(f"Informació per al Hub: {hub}")
-            st.write(f"Trikes: {numberTrikes[hub]}")
-            st.write(f"4Wheeler: {number4Wheels[hub]}")
+            st.write(f"TRIKES: {numberTrikes[hub]}")
+            st.write(f"4W: {number4Wheels[hub]}")
             col5, col6, col7, col8 = st.columns(4)
             with col5:
                 st.write(f"Hores Totals: {total_hours:.1f}")
@@ -793,7 +667,7 @@ def main():
         workers_napols_table = st.text_area("HORARIS NAPOLS")
 
     if routes_table:
-        dfj_hub = pd.DataFrame(process_routes(routes_table, hipotesi["Temps Per paquet"], hipotesi["Pes Trike"]), columns=["Id", "Prioritari", "Tipus Bici", "Data", "Hub", "Hora Inici Ruta Plnif",
+        dfj_hub = pd.DataFrame(process_routes(routes_table, hipotesi["Temps Per paquet"], hipotesi["Pes Trike"]), columns=["Id", "Prioritari", "Tipus Bici", "Pes", "Data", "Hub", "Hora Inici Ruta Plnif",
                                 "Hora Inici Ruta Real", "Hora Fi Ruta", "Inici Seguent Ruta",
                                 "Temps Recorregut Ruta", "Temps Total Ruta", "Num Entregues", "Assignació", "Assignacio Prov", "order", "Plnif vs Real Min"])
         
