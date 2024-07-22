@@ -214,7 +214,7 @@ def save_data(data, file_path):
         return False
 
 def process_user_inputs():
-    """Process user inputs from the Streamlit sidebar."""
+    """Process user inputs."""
     file_path = 'variables.json'
     hipotesi = load_data(file_path)
 
@@ -656,8 +656,8 @@ def display_ui(dfj, dft, timeline, numberTrikes, number4Wheels):
     
     return additional_info_list
 
-def main():
-    st.set_page_config(layout="wide")
+def executarGenerarHoraris():
+    
     hipotesi, col4 = process_user_inputs()
     routes_table = st.text_area("taula amb les rutes")
     colsants, colnapols = st.columns(2)
@@ -711,4 +711,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    executarGenerarHoraris()
