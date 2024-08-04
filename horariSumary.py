@@ -10,27 +10,48 @@ import re
 
 def intToHora(minutes):
     """Convert minutes into a 'hh:mm' formatted string."""
-    hours = minutes // 60
-    mins = minutes % 60
+    hours = int(minutes // 60)
+    mins = int(minutes % 60)
     return f"{hours:02}:{mins:02}"
 
 
 def horaToInt(time_str):
-    """Convert a 'hh:mm' formatted string into total minutes."""
+    """Convert a 'hh:mm' or 'hh:mm:ss' formatted string into total minutes."""
     try:
-        hours, minutes = map(int, time_str.split(':'))
-        return hours * 60 + minutes
+        parts = list(map(int, time_str.split(':')))
+        if len(parts) == 2:
+            hours, minutes = parts
+            seconds = 0
+        elif len(parts) == 3:
+            hours, minutes, seconds = parts
+        else:
+            raise ValueError
+        
+        total_minutes = hours * 60 + minutes + seconds / 60
+        return total_minutes
     except ValueError:
-        raise ValueError("Input must be in 'hh:mm' format and contain valid integers.")
+        raise ValueError("Input must be in 'hh:mm' or 'hh:mm:ss' format and contain valid integers.")
     except IndexError:
-        raise ValueError("Input must be in 'hh:mm' format.")
+        raise ValueError("Input must be in 'hh:mm' or 'hh:mm:ss' format.")
 
+
+def save_data(data, file_path):
+    """Save data to a JSON file."""
+    try:
+        with open(file_path, 'w') as file:
+            json.dump(data, file, indent=4)
+        print(f"Data successfully saved to {file_path}.")
+        return True
+    except (IOError, TypeError) as e:
+        print(f"Error saving data to {file_path}: {e}.")
+        return False
+    
 def load_data(file_path, default_data=None):
     """Load data from a JSON file."""
     if default_data is None:
         default_data = {
-            "Temps Entrada": 10,
-            "Temps Sortida": 5,
+            "Temps Inici Torn": 12,
+            "Temps Fi Torn": 5,
         }
     if not os.path.exists(file_path):
         print(f"File not found: {file_path}. Using default data.")
@@ -43,309 +64,116 @@ def load_data(file_path, default_data=None):
         print(f"Error reading file {file_path}: {e}. Using default data.")
         return default_data
 
-def save_data(data, file_path):
-    """Save data to a JSON file."""
-    try:
-        with open(file_path, 'w') as file:
-            json.dump(data, file, indent=4) 
-        return True
-    except (IOError, TypeError) as e:
-        print(f"Error saving data to {file_path}: {e}.")
-        return False
-
-def process_User_Input():
+def process_user_inputs():
     """Process user inputs."""
     file_path = 'variablesSumary.json'
     hipotesi = load_data(file_path)
-    
-    col1, col2 = st.columns([1, 1])
-    
-    for i, key in enumerate(hipotesi.keys()):
-        with col1 if i % 2 == 0 else col2:
-            hipotesi[key] = int(st.text_input(f"{key}:", hipotesi[key]))
-
+    keys = list(hipotesi.keys())
+    print (keys)
+    col1, col2 = st.columns(2)
+    with col1:
+        hipotesi["Temps Inici Torn"] = int(st.text_input("Temps Inici Torn", hipotesi["Temps Inici Torn"]))
+    with col2:
+        hipotesi["Temps Fi Torn"] = int(st.text_input("Temps Fi Torn", hipotesi["Temps Fi Torn"]))
+    # Save data after collecting inputs
     save_data(hipotesi, file_path)
     return hipotesi
 
-def process_Week_Schedule(weekSchedule, hipotesi):
-    
+def process_rutes_reals(rutes_reals):
+    """Process the real routes data."""
+    # Initialize an empty list to store processed route data
     processed_routes = []
-    distinctdays = set()
-    # Set the locale to Spanish
-    locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
 
-    for line in weekSchedule.splitlines():
-        if not line.strip():
-            continue
-        
-        route_elements = re.split(r"\t", line)
-
-        try:
-            date_str = route_elements[0] + " " + route_elements[1] 
-            # Specify the year manually (current year)
-            current_year = datetime.now().year
-
-            # Parse the date string and add the year
-            date_obj = datetime.strptime(f"{date_str} {current_year}", '%B %d %Y')
-
-            if date_obj.strftime("%A") not in distinctdays:
-                distinctdays.add(date_obj.strftime("%A"))
-                if len(distinctdays) > 5:
-                    break
-            
-            repartidor = route_elements[6]
-            if repartidor == "":
-                repartidor = "XXX"
-            horaSortida = route_elements[7]
-            horaArribada = route_elements[8]
-            
-            processed_route = [
-                date_obj,
-                repartidor,
-                horaSortida,
-                horaArribada                
-            ]
-            
-            processed_routes.append(processed_route)
-            
-        except ValueError as e:
-            print(f"Error processing line: {line} - {e}")
-            continue
-        
-    processed_routes = pd.DataFrame(processed_routes, columns=["Data", "Repartidor", "Hora Sortida", "Hora Arribada"])
-    return processed_routes
-
-
-
- 
-def generate_weekly_schedule(weekSchedule, hipotesi):
-    workerSchedule = {}
-
-    for index, row in weekSchedule.iterrows():
-        dia = row["Data"].strftime("%A")
-        repartidor = row["Repartidor"]
-        
-        def parse_time(time_str, formats):
-            for fmt in formats:
-                try:
-                    return datetime.strptime(time_str, fmt)
-                except ValueError:
-                    continue
-            raise ValueError(f"Time format for '{time_str}' not recognized")
-        
-
-        formats = ["%H:%M:%S", "%H:%M"]
-
-        try:
-            entrada = parse_time(row["Hora Sortida"], formats) - timedelta(minutes=hipotesi["Temps Entrada"])
-            sortida = parse_time(row["Hora Arribada"], formats) + timedelta(minutes=hipotesi["Temps Sortida"])
-        except ValueError as e:
-            print(f"Error parsing time: {e}")
-        
-        
-        if (dia, repartidor) not in workerSchedule:
-            workerSchedule[(dia, repartidor)] = [entrada, sortida, round((sortida - entrada).total_seconds() / 3600, 1)]
-        else:
-            entrada = workerSchedule[(dia, repartidor)][0]
-            workerSchedule[(dia, repartidor)][1] = sortida
-            workerSchedule[(dia, repartidor)][2] = round((sortida - entrada).total_seconds() / 3600,1)
-    
-    return workerSchedule
-
-
-
-def process_OldWeek_Schedule(OldWeekSchedule):
-    """
-    Processes worker data to extract and format relevant information based on the day of the week.
-
-    Args:
-        workers_table (str): String containing the worker data.
-        week_day (int): Day of the week (0-6, where 0 is Monday).
-
-    Returns:
-        list: List of processed worker data.
-    """
-
-    # Initialize an empty list to store processed worker data
-    processed_workers = {}
-
-
-
-    # Process each line in the workers table
-    for line in OldWeekSchedule.splitlines():
+    # Process each line in the input data
+    for line in rutes_reals.splitlines():
         if not line.strip():
             continue  # Skip empty lines
 
-        worker = re.split(r"\t", line)
+        route_elements = re.split(r"\t", line)
 
-        try:
-            treballador = worker[0].upper()
-            # Convert hours worked from comma to period for float conversion
-            for i in range(0, 5):
-                worker[i+2] = worker[i+2].replace(",", ".")
-            processed_workers[("lunes", treballador)] = [worker[1], worker[2], worker[3]]
-            processed_workers[("martes", treballador)] = [worker[4], worker[5], worker[6]]
-            processed_workers[("miÃ©rcoles", treballador)] = [worker[7], worker[8], worker[9]]
-            processed_workers[("jueves", treballador)] = [worker[10], worker[11], worker[12]]
-            processed_workers[("viernes", treballador)] = [worker[13], worker[14], worker[15]]
-            
+        meses = {
+            'enero': 1,
+            'febrero': 2,
+            'marzo': 3,
+            'abril': 4,
+            'mayo': 5,
+            'junio': 6,
+            'julio': 7,
+            'agosto': 8,
+            'septiembre': 9,
+            'octubre': 10,
+            'noviembre': 11,
+            'diciembre': 12 
+        }
 
-            # Append the processed worker data to the list
-
-        except ValueError as e:
-            print(f"Error processing line: {line} - {e}")
-            continue
-
-    # processed_workers = processed_workers.sort_values(by="Aux")
-    # processed_workers = processed_workers.drop("Aux", axis=1)
-    return processed_workers
-
-
-
-
-
-def generate_Excel_File(oldWeekSchedule, newWeekSchedule):
-    for index, row in newWeekSchedule.items():
-        newWeekSchedule[index][0] = newWeekSchedule[index][0].strftime("%H:%M")
-        newWeekSchedule[index][1] = newWeekSchedule[index][1].strftime("%H:%M")
-
-
-    
-    workers = set()
-    for index, row in newWeekSchedule.items():
-        if index[1] not in workers:
-            workers.add(index[1])
-   
-    try:        
-        wb = opxl.Workbook()
-    except Exception as e:
-        print(f"Error loading the Excel file: {e}")
+        dias_semana = {
+            0: 'Lunes',
+            1: 'Martes',
+            2: 'Miercoles',
+            3: 'Jueves',
+            4: 'Viernes',
+            5: 'Sábado',
+            6: 'Domingo'
+        }
         
-    sheet = wb.active
-    sheet.title = "Horari asdfsadf"
-    
-    row_number = 5
-    sheet.cell(row=3, column=3).value = "Lunes"
-    sheet.cell(row=3, column=6).value = "Martes"
-    sheet.cell(row=3, column=9).value = "miÃ©rcoles"
-    sheet.cell(row=3, column=12).value = "Jueves"
-    sheet.cell(row=3, column=15).value = "Viernes"
-    for i in range(0, 5):
-        sheet.cell(row=4, column=3 + i * 3).value = "Entrada"
-        sheet.cell(row=4, column=4 + i * 3).value = "Sortida"
-        sheet.cell(row=4, column=5 + i * 3).value = "Hores"
-    for worker in workers:
-        sheet.cell(row=row_number, column=2).value = worker
-        if ("lunes", worker) in newWeekSchedule:
-            sheet.cell(row=row_number, column=3).value = newWeekSchedule[("lunes", worker)][0]
-            sheet.cell(row=row_number, column=4).value = newWeekSchedule[("lunes", worker)][1]
-            sheet.cell(row=row_number, column=5).value = newWeekSchedule[("lunes", worker)][2]
-        if ("martes", worker) in newWeekSchedule:
-            sheet.cell(row=row_number, column=6).value = newWeekSchedule[("martes", worker)][0]
-            sheet.cell(row=row_number, column=7).value = newWeekSchedule[("martes", worker)][1]
-            sheet.cell(row=row_number, column=8).value = newWeekSchedule[("martes", worker)][2]
-        if ("miÃ©rcoles", worker) in newWeekSchedule:
-            sheet.cell(row=row_number, column=9).value = newWeekSchedule[("miÃ©rcoles", worker)][0]
-            sheet.cell(row=row_number, column=10).value = newWeekSchedule[("miÃ©rcoles", worker)][1]
-            sheet.cell(row=row_number, column=11).value = newWeekSchedule[("miÃ©rcoles", worker)][2]
-        if ("jueves", worker) in newWeekSchedule:
-            sheet.cell(row=row_number, column=12).value = newWeekSchedule[("jueves", worker)][0]
-            sheet.cell(row=row_number, column=13).value = newWeekSchedule[("jueves", worker)][1]
-            sheet.cell(row=row_number, column=14).value = newWeekSchedule[("jueves", worker)][2]
-        if ("viernes", worker) in newWeekSchedule:
-            sheet.cell(row=row_number, column=15).value = newWeekSchedule[("viernes", worker)][0]
-            sheet.cell(row=row_number, column=16).value = newWeekSchedule[("viernes", worker)][1]
-            sheet.cell(row=row_number, column=17).value = newWeekSchedule[("viernes", worker)][2]
-        row_number += 1
+        mes = meses.get(route_elements[0].lower())
+        data = datetime(datetime.now().year, mes, int(route_elements[1]))
+        dia_semana = dias_semana[data.weekday()]
+        hora_sortida_ruta = route_elements[7]
+        hora_sortida_ruta_aux = horaToInt(hora_sortida_ruta)
+        hora_arribada_ruta = route_elements[8]
+        repartidor = route_elements[6]
+        processed_route = [
+            data,
+            dia_semana,
+            repartidor,
+            hora_sortida_ruta,
+            hora_arribada_ruta,
+            hora_sortida_ruta_aux
+        ]
+        processed_routes.append(processed_route)
 
-    row_number += 5
-    if not isinstance(oldWeekSchedule, str):
-        workersWritten = set()
+    return processed_routes
 
-        sheet.cell(row=row_number-2, column=3).value = "Lunes"
-        sheet.cell(row=row_number-2, column=6).value = "Martes"
-        sheet.cell(row=row_number-2, column=9).value = "miÃ©rcoles"
-        sheet.cell(row=row_number-2, column=12).value = "Jueves"
-        sheet.cell(row=row_number-2, column=15).value = "Viernes"
-        for i in range(0, 5):
-            sheet.cell(row=row_number-1, column=3 + i * 3).value = "Entrada"
-            sheet.cell(row=row_number-1, column=4 + i * 3).value = "Sortida"
-            sheet.cell(row=row_number-1, column=5 + i * 3).value = "Hores"
-        for worker in workers:
-            workersWritten.add(worker)
-            sheet.cell(row=row_number, column=2).value = worker
-            
-            if ("lunes", worker) in oldWeekSchedule:
-                sheet.cell(row=row_number, column=3).value = oldWeekSchedule[("lunes", worker)][0]
-                sheet.cell(row=row_number, column=4).value = oldWeekSchedule[("lunes", worker)][1]
-                sheet.cell(row=row_number, column=5).value = oldWeekSchedule[("lunes", worker)][2]
-            if ("martes", worker) in oldWeekSchedule:
-                sheet.cell(row=row_number, column=6).value = oldWeekSchedule[("martes", worker)][0]
-                sheet.cell(row=row_number, column=7).value = oldWeekSchedule[("martes", worker)][1]
-                sheet.cell(row=row_number, column=8).value = oldWeekSchedule[("martes", worker)][2]
-            if ("miÃ©rcoles", worker) in oldWeekSchedule:
-                sheet.cell(row=row_number, column=9).value = oldWeekSchedule[("miÃ©rcoles", worker)][0]
-                sheet.cell(row=row_number, column=10).value = oldWeekSchedule[("miÃ©rcoles", worker)][1]
-                sheet.cell(row=row_number, column=11).value = oldWeekSchedule[("miÃ©rcoles", worker)][2]
-            if ("jueves", worker) in oldWeekSchedule:
-                sheet.cell(row=row_number, column=12).value = oldWeekSchedule[("jueves", worker)][0]
-                sheet.cell(row=row_number, column=13).value = oldWeekSchedule[("jueves", worker)][1]
-                sheet.cell(row=row_number, column=14).value = oldWeekSchedule[("jueves", worker)][2]
-            if ("viernes", worker) in oldWeekSchedule:
-                sheet.cell(row=row_number, column=15).value = oldWeekSchedule[("viernes", worker)][0]
-                sheet.cell(row=row_number, column=16).value = oldWeekSchedule[("viernes", worker)][1]
-                sheet.cell(row=row_number, column=17).value = oldWeekSchedule[("viernes", worker)][2]
-            row_number += 1
-        
-        for (day, worker), info in oldWeekSchedule.items():
-            if worker not in workersWritten:
-                workersWritten.add(worker)
-                sheet.cell(row=row_number, column=2).value = worker
-                if ("lunes", worker) in oldWeekSchedule:
-                    sheet.cell(row=row_number, column=3).value = oldWeekSchedule[("lunes", worker)][0]
-                    sheet.cell(row=row_number, column=4).value = oldWeekSchedule[("lunes", worker)][1]
-                    sheet.cell(row=row_number, column=5).value = oldWeekSchedule[("lunes", worker)][2]
-                if ("martes", worker) in oldWeekSchedule:
-                    sheet.cell(row=row_number, column=6).value = oldWeekSchedule[("martes", worker)][0]
-                    sheet.cell(row=row_number, column=7).value = oldWeekSchedule[("martes", worker)][1]
-                    sheet.cell(row=row_number, column=8).value = oldWeekSchedule[("martes", worker)][2]
-                if ("miÃ©rcoles", worker) in oldWeekSchedule:
-                    sheet.cell(row=row_number, column=9).value = oldWeekSchedule[("miÃ©rcoles", worker)][0]
-                    sheet.cell(row=row_number, column=10).value = oldWeekSchedule[("miÃ©rcoles", worker)][1]
-                    sheet.cell(row=row_number, column=11).value = oldWeekSchedule[("miÃ©rcoles", worker)][2]
-                if ("jueves", worker) in oldWeekSchedule:
-                    sheet.cell(row=row_number, column=12).value = oldWeekSchedule[("jueves", worker)][0]
-                    sheet.cell(row=row_number, column=13).value = oldWeekSchedule[("jueves", worker)][1]
-                    sheet.cell(row=row_number, column=14).value = oldWeekSchedule[("jueves", worker)][2]
-                if ("viernes", worker) in oldWeekSchedule:
-                    sheet.cell(row=row_number, column=15).value = oldWeekSchedule[("viernes", worker)][0]
-                    sheet.cell(row=row_number, column=16).value = oldWeekSchedule[("viernes", worker)][1]
-                    sheet.cell(row=row_number, column=17).value = oldWeekSchedule[("viernes", worker)][2]
-                row_number += 1
-                
-    wb.save("ResumHorari.xlsx")
+def generarHoraris(rutes_reals_processades, hipotesi):
+    """Generate the summary of the routes."""
+    horaris = {}
+    dia_setmana = rutes_reals_processades.loc[0, "Dia Semana"]
+    for index, ruta in rutes_reals_processades.iterrows():
+        if ruta["Repartidor"] not in horaris:
+            print(horaToInt(ruta["Hora Sortida"]) + hipotesi["Temps Inici Torn"])
+            print(intToHora(horaToInt(ruta["Hora Sortida"]) + hipotesi["Temps Inici Torn"]))
+            horaris[ruta["Repartidor"]] = [intToHora(horaToInt(ruta["Hora Sortida"]) + hipotesi["Temps Inici Torn"]), intToHora(horaToInt(ruta["Hora Arribada"]) + hipotesi["Temps Fi Torn"])]
+        else:
+            horaris[ruta["Repartidor"]][1] = intToHora(horaToInt(ruta["Hora Arribada"]) + hipotesi["Temps Fi Torn"])
 
-
+    st.write(horaris)
+    return horaris, dia_setmana
+       
 def executarResumHoraris():
+    st.header("Resumen de Horarios")
+    hipotesi = process_user_inputs()
+    rutes_reals = st.text_area("Matriu Reporte Hubs")
+    rutes_reals_processades = process_rutes_reals(rutes_reals)
+    #convertir rutes reals processades a un dataframe
+    df = pd.DataFrame(rutes_reals_processades, columns=["Data", "Dia Semana", "Repartidor", "Hora Sortida", "Hora Arribada", "Hora Sortida Aux"])
+    df = df.sort_values(by=["Repartidor", "Hora Sortida Aux"])
+    df = df.reset_index(drop=True)
+    df = df.drop(columns=["Hora Sortida Aux"])
+    st.write(df)
+    horaris = generarHoraris(df, hipotesi)
+    df_horaris = pd.DataFrame(horaris[0]).T
+    df_horaris["Dia Setmana"] = horaris[1]
+    df_horaris = df_horaris.reset_index()
+    df_horaris.columns = ["Repartidor", "Hora Inici", "Hora Fi", "Dia Setmana"]
+    df_horaris = df_horaris.sort_values(by=["Dia Setmana", "Hora Inici"])
+    st.write(df_horaris)
     
-    st.header("Horari Sumary")
-    hipotesi = process_User_Input()
-    weekSchedule = st.text_area("Horari de la setmana")
-    oldWeekSchedule = st.text_area("Horari de la setmana anterior")
-    if weekSchedule != "":
-        if oldWeekSchedule != "":
-            oldWeekSchedule = process_OldWeek_Schedule(oldWeekSchedule)
-        weekSchedule = process_Week_Schedule(weekSchedule, hipotesi)     
-        newWeekSchedule = generate_weekly_schedule(weekSchedule, hipotesi)
-        generate_Excel_File(oldWeekSchedule, newWeekSchedule)
-        with open("ResumHorari.xlsx", "rb") as file:
-                    st.download_button(
-                        label='Descarregar Fitxer Excel',
-                        data=file.read(),
-                        file_name='ResumHorari.xlsx',
-                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                    )
-        print("Done")
+
+
+
+
+
 
 if __name__ == "__main__":
     executarResumHoraris()
