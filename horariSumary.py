@@ -8,6 +8,32 @@ import json
 import os
 import re
 
+meses = {
+    'enero': 1,
+    'febrero': 2,
+    'marzo': 3,
+    'abril': 4,
+    'mayo': 5,
+    'junio': 6,
+    'julio': 7,
+    'agosto': 8,
+    'septiembre': 9,
+    'octubre': 10,
+    'noviembre': 11,
+    'diciembre': 12 
+}
+
+dias_semana = {
+    0: 'Lunes',
+    1: 'Martes',
+    2: 'Miercoles',
+    3: 'Jueves',
+    4: 'Viernes',
+    5: 'Sábado',
+    6: 'Domingo'
+}
+
+
 def intToHora(minutes):
     """Convert minutes into a 'hh:mm' formatted string."""
     hours = int(minutes // 60)
@@ -29,10 +55,13 @@ def horaToInt(time_str):
         
         total_minutes = hours * 60 + minutes + seconds / 60
         return total_minutes
-    except ValueError:
-        raise ValueError("Input must be in 'hh:mm' or 'hh:mm:ss' format and contain valid integers.")
-    except IndexError:
-        raise ValueError("Input must be in 'hh:mm' or 'hh:mm:ss' format.")
+    except ValueError as e:
+        print(f"Error converting time string to minutes: {e}")
+        return ""
+    except IndexError as e:
+        print(f"Error converting time string to minutes: {e}")
+        return ""
+
 
 
 def save_data(data, file_path):
@@ -69,7 +98,6 @@ def process_user_inputs():
     file_path = 'variablesSumary.json'
     hipotesi = load_data(file_path)
     keys = list(hipotesi.keys())
-    print (keys)
     col1, col2 = st.columns(2)
     with col1:
         hipotesi["Temps Inici Torn"] = int(st.text_input("Temps Inici Torn", hipotesi["Temps Inici Torn"]))
@@ -83,6 +111,7 @@ def process_rutes_reals(rutes_reals):
     """Process the real routes data."""
     # Initialize an empty list to store processed route data
     processed_routes = []
+    errors= []
 
     # Process each line in the input data
     for line in rutes_reals.splitlines():
@@ -91,31 +120,6 @@ def process_rutes_reals(rutes_reals):
 
         route_elements = re.split(r"\t", line)
 
-        meses = {
-            'enero': 1,
-            'febrero': 2,
-            'marzo': 3,
-            'abril': 4,
-            'mayo': 5,
-            'junio': 6,
-            'julio': 7,
-            'agosto': 8,
-            'septiembre': 9,
-            'octubre': 10,
-            'noviembre': 11,
-            'diciembre': 12 
-        }
-
-        dias_semana = {
-            0: 'Lunes',
-            1: 'Martes',
-            2: 'Miercoles',
-            3: 'Jueves',
-            4: 'Viernes',
-            5: 'Sábado',
-            6: 'Domingo'
-        }
-        
         mes = meses.get(route_elements[0].lower())
         data = datetime(datetime.now().year, mes, int(route_elements[1]))
         dia_semana = dias_semana[data.weekday()]
@@ -123,6 +127,11 @@ def process_rutes_reals(rutes_reals):
         hora_sortida_ruta_aux = horaToInt(hora_sortida_ruta)
         hora_arribada_ruta = route_elements[8]
         repartidor = route_elements[6]
+        if data == "" or dia_semana == "" or repartidor == "" or hora_sortida_ruta == "" or hora_arribada_ruta == "" or hora_sortida_ruta_aux == "":
+            errors.append(f"Error en la entrada de datos. Revisa la línea: {line}")
+            continue
+
+        print(f"hora sortida: {hora_sortida_ruta}")
         processed_route = [
             data,
             dia_semana,
@@ -133,41 +142,58 @@ def process_rutes_reals(rutes_reals):
         ]
         processed_routes.append(processed_route)
 
-    return processed_routes
+    df = pd.DataFrame(processed_routes, columns=["Data", "Dia Semana", "Repartidor", "Hora Sortida", "Hora Arribada", "Hora Sortida Aux"])
+    df = df.sort_values(by=["Data", "Repartidor", "Hora Sortida Aux"])
+    df = df.reset_index(drop=True)
+    df = df.drop(columns=["Hora Sortida Aux"])
+    if errors:
+        with st.expander("Errores en la entrada de datos"):
+            for error in errors:
+                st.error(error)
+    return df
 
-def generarHoraris(rutes_reals_processades, hipotesi):
+def generarHorarisDia(rutes_reals_processades, hipotesi):
     """Generate the summary of the routes."""
     horaris = {}
-    dia_setmana = rutes_reals_processades.loc[0, "Dia Semana"]
     for index, ruta in rutes_reals_processades.iterrows():
         if ruta["Repartidor"] not in horaris:
-            print(horaToInt(ruta["Hora Sortida"]) + hipotesi["Temps Inici Torn"])
-            print(intToHora(horaToInt(ruta["Hora Sortida"]) + hipotesi["Temps Inici Torn"]))
-            horaris[ruta["Repartidor"]] = [intToHora(horaToInt(ruta["Hora Sortida"]) + hipotesi["Temps Inici Torn"]), intToHora(horaToInt(ruta["Hora Arribada"]) + hipotesi["Temps Fi Torn"])]
+            print(ruta["Hora Sortida"])
+            hora_sortida = horaToInt(ruta["Hora Sortida"]) - hipotesi["Temps Inici Torn"]
+            hora_arribada = horaToInt(ruta["Hora Arribada"]) + hipotesi["Temps Fi Torn"]
+            horaris[ruta["Repartidor"]] = [intToHora(hora_sortida), intToHora(hora_arribada), round((hora_arribada-hora_sortida)/60,1) ,ruta["Data"].date()]
         else:
             horaris[ruta["Repartidor"]][1] = intToHora(horaToInt(ruta["Hora Arribada"]) + hipotesi["Temps Fi Torn"])
+            horaris[ruta["Repartidor"]][2] = round((horaToInt(ruta["Hora Arribada"]) + hipotesi["Temps Fi Torn"] - horaToInt(horaris[ruta["Repartidor"]][0]))/60, 1)
 
-    st.write(horaris)
-    return horaris, dia_setmana
+    df_horaris = pd.DataFrame(horaris).T
+    df_horaris["Dia Setmana"] = ruta["Dia Semana"]
+    df_horaris = df_horaris.reset_index()
+    df_horaris.columns = ["Repartidor", "Hora Inici", "Hora Fi", "Hores Totals", "Data", "Dia Setmana"]
+    df_horaris = df_horaris[["Data", "Dia Setmana", "Repartidor", "Hora Inici", "Hora Fi", "Hores Totals"]]
+    df_horaris = df_horaris.sort_values(by=["Dia Setmana", "Hora Inici"])
+    return df_horaris
        
+def generarHorarisTotals(rutes_reals_processades, hipotesi):
+    rutes_reals_processades_per_dia = rutes_reals_processades.groupby(["Data"])
+    for dia in rutes_reals_processades_per_dia:
+        horaris = generarHorarisDia(dia[1], hipotesi)
+        st.write(f"{dias_semana.get(dia[0][0].date().weekday())}: {dia[0][0].date().strftime('%d/%m/%Y')}")
+        st.write(horaris)
+
+
+
 def executarResumHoraris():
     st.header("Resumen de Horarios")
     hipotesi = process_user_inputs()
     rutes_reals = st.text_area("Matriu Reporte Hubs")
+    if not rutes_reals:
+        st.stop()
     rutes_reals_processades = process_rutes_reals(rutes_reals)
-    #convertir rutes reals processades a un dataframe
-    df = pd.DataFrame(rutes_reals_processades, columns=["Data", "Dia Semana", "Repartidor", "Hora Sortida", "Hora Arribada", "Hora Sortida Aux"])
-    df = df.sort_values(by=["Repartidor", "Hora Sortida Aux"])
-    df = df.reset_index(drop=True)
-    df = df.drop(columns=["Hora Sortida Aux"])
-    st.write(df)
-    horaris = generarHoraris(df, hipotesi)
-    df_horaris = pd.DataFrame(horaris[0]).T
-    df_horaris["Dia Setmana"] = horaris[1]
-    df_horaris = df_horaris.reset_index()
-    df_horaris.columns = ["Repartidor", "Hora Inici", "Hora Fi", "Dia Setmana"]
-    df_horaris = df_horaris.sort_values(by=["Dia Setmana", "Hora Inici"])
-    st.write(df_horaris)
+
+    generarHorarisTotals(rutes_reals_processades, hipotesi)
+    # horaris, dia_setmana = generarHorarisDia(rutes_reals_processades, hipotesi)
+
+    # st.write(horaris)
     
 
 
