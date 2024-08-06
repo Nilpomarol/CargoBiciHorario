@@ -1,4 +1,22 @@
 {
-    "Temps Inici Torn": 12,
-    "Temps Fi Torn": 5
+    "data": {
+        "Temps Inici Torn": 12,
+        "Temps Fi Torn": 5
+    },
+    "hores_contractades": {
+        "GIANLUCA": "10",
+        "CRISTIAN": "10",
+        "LAILA": "5",
+        "JORDI": "25",
+        "VLADI": "35",
+        "SEBASTIAN": "20",
+        "JAIME": "30",
+        "MAXI": "30",
+        "ZOE": "35",
+        "ROCCO": "10",
+        "ERICK": "15",
+        "YOEL": "15",
+        "NIL": "35",
+        "ALAN": "5"
+    }
 }
