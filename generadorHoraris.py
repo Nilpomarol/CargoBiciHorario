@@ -49,30 +49,32 @@ def process_routes(routes_table, time_for_delivery, pes_trike):
         route_elements = re.split(r"\t", line)
 
         # Ensure the line has the expected number of elements
-        if len(route_elements) != 15:
+        parche = 0
+        if len(route_elements) == 14:
+            parche = -1
+        elif len(route_elements) != 15:
             print(f"Warning: Unexpected line format: {line}")
             continue
 
         try:
             # Convert times and distances
-            departure_time = horaToInt(route_elements[3])
-            delivery_time = int(route_elements[6])
-            multiplier = int(route_elements[12])
+            departure_time = horaToInt(route_elements[3 + parche])
+            delivery_time = int(route_elements[6 + parche])
+            multiplier = int(route_elements[12 + parche])
             arrival_time = departure_time + delivery_time + (multiplier * time_for_delivery)
 
             # Determine priority and bike type
             is_priority = ' w ' in route_elements[0].lower()
-            bike_type = "TRIKE" if int(route_elements[9]) <= pes_trike else "4W"
-
+            bike_type = "TRIKE" if int(route_elements[9 +  parche]) <= pes_trike else "4W"
             # Create a processed route entry
             processed_route = [
                 route_elements[0],  # Route identifier
                 is_priority,  # Priority flag
                 bike_type,# Bike type
-                int(route_elements[9]),  # Weight
-                route_elements[2],  # Route detail
-                route_elements[10],  # Additional detail
-                route_elements[3],  # Departure time
+                int(route_elements[9 + parche]),  # Weight
+                route_elements[2 + parche],  # Route detail
+                route_elements[10 + parche],  # Additional detail
+                route_elements[3 + parche],  # Departure time
                 '',  # Placeholder
                 intToHora(arrival_time),  # Arrival time
                 '',  # Placeholder
