@@ -32,7 +32,7 @@ def process_routes(routes_table, time_for_delivery, pes_trike):
 
     Args:
         routes_table (str): String containing the routes data.
-        time_for_delivery (int): Multiplier for delivery time.
+        time_for_delivery (int): paquets for delivery time.
 
     Returns:
         list: List of processed routes, or None if there's an error.
@@ -62,10 +62,11 @@ def process_routes(routes_table, time_for_delivery, pes_trike):
             # Convert times and distances
             departure_time = horaToInt(route_elements[3 + parche])
             delivery_time = int(route_elements[6 + parche])
-            multiplier = int(route_elements[12 + parche])
-            arrival_time = departure_time + delivery_time
-            if parche != 1:
-                arrival_time += (multiplier * time_for_delivery)
+            paquets = int(route_elements[12 + parche])
+            if parche == 1:
+                delivery_time -= (paquets * 7)
+            arrival_time = departure_time + delivery_time + paquets * time_for_delivery
+            
 
             # Determine priority and bike type
             is_priority = ' w ' in route_elements[0].lower()
@@ -84,7 +85,7 @@ def process_routes(routes_table, time_for_delivery, pes_trike):
                 '',  # Placeholder
                 delivery_time,  # Delivery time
                 '',  # Placeholder
-                multiplier,  # Multiplier
+                paquets,  # paquets
                 '',  # Placeholder
                 "",  # Placeholder
                 departure_time,  # Departure time in minutes
@@ -527,7 +528,7 @@ def generate_excel_file(dfj, dft, workers_sants, workers_napols, additionalInfoL
             print(f"Skipping {hub}: Worksheet does not exist.")
             continue
 
-        row_number = data[3] + 2
+        row_number = data[3] + 7
         column_letter = 'G'
         formula = f"=SUM({column_letter}3:{column_letter}{row_number})"
         row_number += 3
