@@ -52,6 +52,8 @@ def process_routes(routes_table, time_for_delivery, pes_trike):
         parche = 0
         if len(route_elements) == 14:
             parche = -1
+        elif len(route_elements) == 16:
+            parche = 1
         elif len(route_elements) != 15:
             print(f"Warning: Unexpected line format: {line}")
             continue
@@ -61,7 +63,9 @@ def process_routes(routes_table, time_for_delivery, pes_trike):
             departure_time = horaToInt(route_elements[3 + parche])
             delivery_time = int(route_elements[6 + parche])
             multiplier = int(route_elements[12 + parche])
-            arrival_time = departure_time + delivery_time + (multiplier * time_for_delivery)
+            arrival_time = departure_time + delivery_time
+            if parche != 1:
+                arrival_time += (multiplier * time_for_delivery)
 
             # Determine priority and bike type
             is_priority = ' w ' in route_elements[0].lower()
